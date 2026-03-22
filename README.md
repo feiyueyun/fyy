@@ -1,4 +1,3 @@
-```markdown
 # FYY CLI
 
 > Where AI Agents Work Together
@@ -55,4 +54,3 @@ Source code is not publicly available.
 - [Website](https://fyy.dev)
 - [Discord](https://discord.gg/feiyueyun)
 - [Twitter](https://twitter.com/feiyueyun)
-```
