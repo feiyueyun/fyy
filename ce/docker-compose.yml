@@ -1,0 +1,284 @@
+# FYY Community Edition — Docker Compose
+# Deploy your own FYY control plane for free.
+#
+# Quick start:
+#   cp .env.example .env
+#   # Edit .env with your passwords and keys
+#   docker compose up -d
+#
+# Documentation: https://github.com/feiyueyun/fyy/blob/main/ce/README.md
+
+name: fyy-ce
+
+services:
+  # --- Infrastructure ---
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-feiyueyun}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nats:
+    image: nats:2.10-alpine
+    command: "-js"
+    healthcheck:
+      test: ["CMD", "nats", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-feiyueyun}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?required}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # --- Control Plane Services ---
+
+  iam-service:
+    image: ghcr.io/feiyueyun/iam-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      IAM_GRPC_ADDR: ":50051"
+      PLATFORM_ADMIN_USERNAME: ${PLATFORM_ADMIN_USERNAME:-admin}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD:?required}
+      JWT_MASTER_KEY: ${JWT_MASTER_KEY:?required}
+      AUTHKEY_AUTO_ENABLED: "${AUTHKEY_AUTO_ENABLED:-true}"
+      DERP_HOSTNAME: ${DERP_HOSTNAME:-localhost}
+      DERP_PORT: "${DERP_HTTPS_PORT:-8443}"
+      DERP_CERT_SHA256: "${DERP_CERT_SHA256:-}"
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-feiyueyun}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?required}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URI: ${GITHUB_REDIRECT_URI:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  device-service:
+    image: ghcr.io/feiyueyun/device-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      DEVICE_GRPC_ADDR: ":50052"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mesh-ctrl:
+    image: ghcr.io/feiyueyun/mesh-ctrl:latest
+    ports:
+      - "${MESH_CTRL_PORT:-8080}:8080"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      IAM_GRPC_ADDR: iam-service:50051
+      DEVICE_GRPC_ADDR: device-service:50052
+      FYY_CONTROL_PLANE_HOST: ${FYY_CONTROL_PLANE_HOST:-localhost}
+      CHANNEL2_URL: ${CHANNEL2_URL:-http://localhost:8080}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      iam-service:
+        condition: service_started
+      device-service:
+        condition: service_started
+    restart: unless-stopped
+
+  open-api-service:
+    image: ghcr.io/feiyueyun/open-api-service:latest
+    ports:
+      - "${OPEN_API_PORT:-8090}:8090"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      IAM_GRPC_ADDR: iam-service:50051
+      DEVICE_GRPC_ADDR: device-service:50052
+      POLICY_GRPC_ADDR: policy-service:50060
+      SKILL_GRPC_ADDR: skill-service-center:50080
+      TAG_GRPC_ADDR: tag-service:50090
+      FOLLOW_GRPC_ADDR: follow-service:50100
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      iam-service:
+        condition: service_started
+    restart: unless-stopped
+
+  policy-service:
+    image: ghcr.io/feiyueyun/policy-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  policy-compiler:
+    image: ghcr.io/feiyueyun/policy-compiler:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      policy-service:
+        condition: service_started
+    restart: unless-stopped
+
+  skill-service-center:
+    image: ghcr.io/feiyueyun/skill-service-center:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      REDIS_ADDR: redis:6379
+      NATS_URL: nats://nats:4222
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-feiyueyun}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?required}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  tag-service:
+    image: ghcr.io/feiyueyun/tag-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  follow-service:
+    image: ghcr.io/feiyueyun/follow-service:latest
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-feiyueyun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      POSTGRES_DB: ${POSTGRES_DB:-feiyueyun}
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  derp:
+    image: ghcr.io/feiyueyun/derp:latest
+    ports:
+      - "${DERP_HTTPS_PORT:-8443}:8443"
+      - "${DERP_STUN_PORT:-3478}:3478/udp"
+    environment:
+      DERP_HOSTNAME: ${DERP_HOSTNAME:-localhost}
+      DERP_HTTPS_PORT: "${DERP_HTTPS_PORT:-8443}"
+      DERP_STUN_PORT: "${DERP_STUN_PORT:-3478}"
+    restart: unless-stopped
+
+  # --- Admin CLI ---
+
+  admin:
+    image: ghcr.io/feiyueyun/feiyueyun-admin:latest
+    profiles: ["admin"]
+    environment:
+      IAM_GRPC_ADDR: iam-service:50051
+      DEVICE_GRPC_ADDR: device-service:50052
+    depends_on:
+      iam-service:
+        condition: service_started
+      device-service:
+        condition: service_started
+    entrypoint: ["/bin/sh"]
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+  minio_data:

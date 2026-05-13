@@ -4,21 +4,45 @@ Get up and running with FYY in 5 minutes.
 
 ## Install
 
+### One-command install (macOS / Linux)
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | sh
+```
+
+This downloads fyy, auto-provisions a temporary AuthKey, joins the official mesh network, and installs fyyd as a system service (auto-start on boot).
+
+**CE users** (self-hosted control plane): set your server address before joining:
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | FYY_SERVER=https://ts.example.com sh
+```
+
 ### macOS (Homebrew)
 
 ```bash
 brew install feiyueyun/tap/fyy
 ```
 
-### Linux / macOS (curl)
+### Manual Download
+
+Download the latest binary for your platform from [Releases](https://github.com/feiyueyun/fyy/releases).
+
+| Platform | Binary |
+|----------|--------|
+| Linux amd64 | `fyy-linux-amd64` |
+| Linux arm64 | `fyy-linux-arm64` |
+| macOS amd64 | `fyy-darwin-amd64` |
+| macOS arm64 | `fyy-darwin-arm64` |
 
 ```bash
-curl -fsSL https://fyy.dev/install | sh
+# Example: Linux amd64
+curl -fsSL -o fyy "https://github.com/feiyueyun/fyy/releases/latest/download/fyy-linux-amd64"
+chmod +x fyy
+sudo mv fyy /usr/local/bin/fyy
+# fyy and fyyd are the same binary
+ln -sf /usr/local/bin/fyy /usr/local/bin/fyyd
 ```
-
-### Windows
-
-Download the latest binary from [Releases](https://github.com/feiyueyun/fyy/releases).
 
 ### Verify Installation
 
@@ -28,13 +52,34 @@ fyy --version
 
 ## Join a Network
 
-Every FYY deployment runs on a secure mesh network. To join, you need an auth key from your network administrator.
+### Official Platform (zero-interaction)
+
+The install script above handles everything automatically. To join manually:
 
 ```bash
-fyy join --auth-key=tskey-auth-xxxxx
+# Obtain a temporary AuthKey from the auto-provision endpoint
+curl -X POST https://api.fyy.dev/v1/auth/auto-provision-authkey \
+  -H "Content-Type: application/json" -d '{}'
+
+# Join with the returned key
+fyy join --auth-key=tskey-auth-xxxxx --server=https://ts.fyy.dev
 ```
 
-Once connected, your device gets a private IP address and can communicate with other devices on the network through encrypted WireGuard tunnels.
+The AuthKey is single-use and valid for 5 minutes. No authentication is required for the auto-provision endpoint.
+
+### CE / Self-Hosted
+
+On your control plane server, create an AuthKey:
+
+```bash
+docker compose exec iam-service-1 feiyueyun-admin authkey create
+```
+
+On your device, join with the key:
+
+```bash
+fyy join --auth-key=<key> --server=https://<your-server>:8080
+```
 
 ## Check Status
 
@@ -42,86 +87,85 @@ Once connected, your device gets a private IP address and can communicate with o
 fyy status
 ```
 
-This shows your connection status, assigned IP address, and available peers on the network.
+Shows your network connection state, assigned tailnet IP, MagicDNS name, active skills count, and daemon uptime.
 
-## Discover Skills
-
-Browse AI employee skills available on your network:
+## Discover and Use Skills
 
 ```bash
-# Search for skills by keyword
+# Search for available skills
 fyy skill search "listing"
 
-# List all installed skills
+# List installed skills
 fyy skill list
-```
 
-## Install and Use a Skill
-
-```bash
 # Install a skill
 fyy skill install listing-generator
 
 # Start the skill
 fyy skill start listing-generator
 
-# Check running skills
-fyy skill list --running
+# Stop a running skill
+fyy skill stop listing-generator
 ```
 
-## Self-Hosting
+## Self-Hosting (CE)
 
-FYY is free to self-host. To run your own control plane:
+FYY Community Edition runs the full control plane on your own infrastructure.
 
 ### Prerequisites
 
 - Docker 24+
 - Docker Compose v2
+- 4 GB RAM, 20 GB disk (minimum)
 
-### Start the Platform
-
-```bash
-# Clone the control plane repository
-git clone https://github.com/feiyueyun/control-plane.git
-cd control-plane
-
-# Copy environment configuration
-cp deployments/.env.example deployments/.env
-
-# Start all services
-make docker-up
-```
-
-This starts the full control plane: PostgreSQL, Redis, NATS, IAM Service, Device Service, Mesh Controller, and a DERP relay node.
-
-### Create an Auth Key
+### Quick CE Deployment
 
 ```bash
-# Access the admin CLI
-docker compose -f deployments/docker-compose.yml exec iam-service \
-  feiyueyun-admin authkey create --reusable --max-uses=10
+# Get the CE distribution
+git clone https://github.com/feiyueyun/fyy.git
+cd fyy/ce
+
+# Configure environment
+cp .env.example .env
+# Edit .env: set POSTGRES_PASSWORD, PLATFORM_ADMIN_PASSWORD, JWT_MASTER_KEY
+
+# Start the platform
+docker compose up -d
 ```
 
-Copy the auth key from the output — you'll use it to connect devices.
+This starts all core services: PostgreSQL, Redis, NATS, IAM Service, Device Service, Mesh Controller, and more.
 
-### Connect a Device
-
-On any device with FYY CLI installed:
+### Create an AuthKey
 
 ```bash
-fyy join --auth-key=<your-auth-key> --server=http://<your-server>:8080
+docker compose exec iam-service-1 feiyueyun-admin authkey create
 ```
 
-### Verify
+Use the output key to connect devices with `fyy join`.
+
+### Connect Devices
+
+On each device with fyy CLI installed:
 
 ```bash
-# On the server: check connected devices
-docker compose -f deployments/docker-compose.yml exec iam-service \
-  feiyueyun-admin device list
-
-# On the device: check connection
-fyy status
+fyy join --auth-key=<key> --server=https://<your-server-ip>:8080
 ```
+
+### Manage Your CE Deployment
+
+```bash
+# View logs
+docker compose logs -f
+
+# Stop the platform
+docker compose down
+
+# Update to a new version
+docker compose pull
+docker compose up -d
+```
+
+For detailed CE documentation, see [`ce/README.md`](../ce/README.md).
 
 ## What's Next
 

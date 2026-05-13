@@ -27,27 +27,35 @@ Data Processing → Report Generation → Business Analysis → Invoice Delivery
 
 ## Installation
 
+### macOS / Linux (one command)
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | sh
+```
+
+This single command downloads fyy, auto-provisions an AuthKey, joins the official mesh network, and installs fyyd as a system service.
+
 ### macOS (Homebrew)
 
 ```bash
 brew install feiyueyun/tap/fyy
 ```
 
-### Linux / macOS (curl)
-
-```bash
-curl -fsSL https://fyy.dev/install | sh
-```
-
 ### Windows
 
-Download from [Releases](https://github.com/feiyueyun/fyy/releases).
+Download the latest binary from [Releases](https://github.com/feiyueyun/fyy/releases).
 
 ## Quick Start
 
 ```bash
-# Join a mesh network
-fyy network join --authkey=tskey-auth-xxx
+# Join the official mesh network (auto-provisioned AuthKey)
+curl -fsSL https://fyy.dev/install.sh | sh
+
+# Or join a specific network with a pre-provisioned key
+fyy join --auth-key=tskey-auth-xxxxx --server=https://ts.example.com
+
+# Check status
+fyy status
 
 # Discover available skills
 fyy skill search "weather"
@@ -55,10 +63,36 @@ fyy skill search "weather"
 # Install and run a skill
 fyy skill install weather-lookup
 fyy skill start weather-lookup
-
-# Check status
-fyy status
 ```
+
+## Self-Hosting (CE)
+
+FYY Community Edition (CE) lets you run your own control plane for free.
+It ships as a Docker Compose setup — get your own mesh network running in minutes.
+
+See [`ce/`](ce/) for the complete CE distribution with Docker Compose files and setup instructions.
+
+Quick CE deployment:
+
+```bash
+git clone https://github.com/feiyueyun/fyy.git
+cd fyy/ce
+cp .env.example .env
+# Edit .env with your passwords and keys
+docker compose up -d
+```
+
+Then create an AuthKey and connect your devices:
+
+```bash
+# Create an auth key for device joining
+docker compose exec iam-service-1 feiyueyun-admin authkey create
+
+# On your device, join the network
+fyy join --auth-key=<key> --server=https://<your-server>:8080
+```
+
+**CE documentation:** [`ce/README.md`](ce/README.md)
 
 ## Built on Open Standards
 
@@ -74,10 +108,12 @@ Compatible with [Anthropic Agent Skills](https://github.com/anthropics/agent-ski
 ## Documentation
 
 - [Product Overview](docs/product-overview.md)
-- [Getting Started](docs/quickstart.md)
+- [Quick Start](docs/quickstart.md)
 - [CLI Reference](docs/cli.md)
 - [Skill Manifest Standard](docs/skill-manifest.md)
 - [Framework Integration Guide](docs/framework-integration.md)
+
+中文文档：[README.zh.md](README.zh.md)
 
 ## Community
 
@@ -87,4 +123,4 @@ Compatible with [Anthropic Agent Skills](https://github.com/anthropics/agent-ski
 
 ## License
 
-FYY CLI is free to use. Pre-built binaries are distributed under the [FYY Software License](LICENSE).
+FYY CLI and Control Plane CE are free to use. Pre-built binaries are distributed under the [FYY Software License](LICENSE).

@@ -8,14 +8,19 @@ Welcome to the FYY documentation. FYY helps solo founders and small teams build 
 - [Quick Start](quickstart.md) — Get up and running in 5 minutes
 - [CLI Reference](cli.md) — Complete command reference
 
-## For Developers
+## For Skill Creators
 
 - [Skill Manifest](skill-manifest.md) — Open standard for defining AI employee capabilities
 - [Framework Integration](framework-integration.md) — Connect CrewAI, LangGraph, and other agent frameworks
 
-## Links
+## Self-Hosting
+
+- [CE Deployment Guide](../ce/README.md) — Deploy your own control plane with Docker Compose
+
+## Community
 
 - [Website](https://fyy.dev)
 - [GitHub](https://github.com/feiyueyun/fyy)
 - [Discord](https://discord.gg/feiyueyun)
-- [Twitter](https://twitter.com/fyy_dev)
+
+中文文档：[快速开始](quickstart.zh.md) | [CE 部署指南](../ce/README.zh.md)
