@@ -150,12 +150,21 @@ else
     else
         echo "${GREEN}AuthKey obtained (valid for 5 minutes).${RESET}"
 
+        echo "${BOLD}==>${RESET} Starting fyyd daemon..."
+        "${INSTALL_DIR}/fyyd" --foreground > /tmp/fyyd.log 2>&1 &
+        DAEMON_PID=$!
+        sleep 3
+
         echo "${BOLD}==>${RESET} Joining mesh network at ${FYY_SERVER}..."
         if ! "${INSTALL_DIR}/fyy" join --auth-key="$AUTH_KEY" --server="$FYY_SERVER"; then
+            kill "$DAEMON_PID" 2>/dev/null || true
             echo "${RED}Error:${RESET} Failed to join mesh network."
             echo "Try running manually: fyy join --auth-key=<key> --server=${FYY_SERVER}"
             exit 1
         fi
+
+        # Stop the temporary daemon — service start will manage it properly
+        kill "$DAEMON_PID" 2>/dev/null || true
     fi
 fi
 
