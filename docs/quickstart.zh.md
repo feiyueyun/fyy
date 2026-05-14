@@ -44,6 +44,29 @@ sudo mv fyy /usr/local/bin/fyy
 ln -sf /usr/local/bin/fyy /usr/local/bin/fyyd
 ```
 
+### Docker / 容器环境
+
+fyy 自动检测容器环境并适配安装——无需 systemd：
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | sh
+```
+
+在容器内，脚本会：
+- 设置 `FYY_RUN_DIR` 为 `$HOME/.fyy/run`（可写的 PID 和 socket 路径）
+- 保持 `fyyd --foreground` 持续运行（加入后不杀死）
+- 跳过系统服务安装
+
+要在容器重启后保持守护进程运行，在 entrypoint 中添加：
+
+```bash
+export FYY_RUN_DIR="${HOME}/.fyy/run"
+mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
+nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+```
+
+Docker Compose 见[Sidecar 配置](../README.zh.md#容器环境)。
+
 ### 验证安装
 
 ```bash

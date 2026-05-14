@@ -44,6 +44,29 @@ sudo mv fyy /usr/local/bin/fyy
 ln -sf /usr/local/bin/fyy /usr/local/bin/fyyd
 ```
 
+### Docker / Container Environments
+
+fyy auto-detects containers and adapts installation — no systemd needed:
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | sh
+```
+
+Inside a container, the script:
+- Sets `FYY_RUN_DIR` to `$HOME/.fyy/run` (writable PID + socket path)
+- Keeps `fyyd --foreground` running (not killed after join)
+- Skips system service installation
+
+To persist across restarts, add to your container entrypoint:
+
+```bash
+export FYY_RUN_DIR="${HOME}/.fyy/run"
+mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
+nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+```
+
+For Docker Compose, see [Sidecar Setup](../README.md#container).
+
 ### Verify Installation
 
 ```bash

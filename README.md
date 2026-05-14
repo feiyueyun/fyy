@@ -35,6 +35,10 @@ curl -fsSL https://fyy.dev/install.sh | sh
 
 This single command downloads fyy, auto-provisions an AuthKey, joins the official mesh network, and installs fyyd as a system service.
 
+**Docker / container environments:** fyy auto-detects containers and adapts — no systemd needed.
+The install script keeps `fyyd --foreground` running and skips service setup.
+See [Container Setup](#container-setup) for details.)
+
 ### macOS (Homebrew)
 
 ```bash
@@ -44,6 +48,57 @@ brew install feiyueyun/tap/fyy
 ### Windows
 
 Download the latest binary from [Releases](https://github.com/feiyueyun/fyy/releases).
+
+## Container Setup
+
+fyy runs inside Docker containers, Kubernetes pods, and other restricted environments.
+
+The install script auto-detects containers and adapts:
+- Sets `FYY_RUN_DIR` to `$HOME/.fyy/run` (writable PID + socket path)
+- Keeps `fyyd --foreground` running after joining the mesh
+- Skips system service installation (systemd/launchd unavailable)
+
+```bash
+# Inside a container — works out of the box
+curl -fsSL https://fyy.dev/install.sh | sh
+```
+
+### Container entrypoint
+
+To keep `fyyd` alive across restarts, add to your entrypoint script:
+
+```bash
+export FYY_RUN_DIR="${HOME}/.fyy/run"
+mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
+nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+
+# Start your application
+exec your-app
+```
+
+### Docker Compose (sidecar)
+
+```yaml
+services:
+  fyy-sidecar:
+    image: alpine:latest
+    container_name: fyy-sidecar
+    cap_add:
+      - NET_ADMIN
+    restart: unless-stopped
+    volumes:
+      - fyy_data:/root/.fyy
+    environment:
+      - FYY_RUN_DIR=/root/.fyy/run
+    command: >
+      sh -c "
+        curl -fsSL https://fyy.dev/install.sh | sh -s -- --skip-join &&
+        exec fyyd --foreground
+      "
+
+volumes:
+  fyy_data:
+```
 
 ## Quick Start
 
