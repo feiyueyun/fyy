@@ -80,18 +80,19 @@ fi
 if [ "$already_installed" -eq 0 ]; then
     # --- Step 4: Download and install ---
     BINARY="fyy-${PLATFORM}"
-    URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}"
+    GZIP_URL="https://github.com/${REPO}/releases/download/${VERSION}/${BINARY}.gz"
 
     echo "${BOLD}==>${RESET} Downloading fyy ${VERSION} for ${PLATFORM}..."
     TMPDIR=$(mktemp -d)
     trap 'rm -rf "$TMPDIR"' EXIT
 
-    if ! curl -fsSL --progress-bar -o "${TMPDIR}/fyy" "$URL"; then
-        echo "${RED}Error:${RESET} Failed to download from ${URL}"
+    if ! curl -fsSL --progress-bar -o "${TMPDIR}/fyy.gz" "$GZIP_URL"; then
+        echo "${RED}Error:${RESET} Failed to download from ${GZIP_URL}"
         echo "Available releases: https://github.com/${REPO}/releases"
         exit 1
     fi
 
+    gunzip -c "${TMPDIR}/fyy.gz" > "${TMPDIR}/fyy"
     chmod +x "${TMPDIR}/fyy"
 
     echo "${BOLD}==>${RESET} Installing to ${INSTALL_DIR}/fyy..."
