@@ -46,26 +46,60 @@ ln -sf /usr/local/bin/fyy /usr/local/bin/fyyd
 
 ### Docker / 容器环境
 
-fyy 自动检测容器环境并适配安装——无需 systemd：
+fyy 自动检测容器并完全适配——无需 systemd，socket/PID 放到 tmpfs，守护进程保持运行。
+
+**自动配置说明：**
+
+| 配置项 | 自动值 | 原因 |
+|---|---|---|
+| `FYY_RUN_DIR` | `/tmp/fyy-run` | tmpfs 用于 Unix socket + PID 文件（Docker 卷不支持 socket 权限修改） |
+| 守护进程 | 后台保持 | 容器内无 systemd/launchd |
+| 系统服务 | 跳过 | 容器运行时负责重启策略 |
+| PID 文件 | 安全处理 | 守护进程正确处理残留 PID 和自身 PID 的边界情况 |
 
 ```bash
+# 容器内一键安装
 curl -fsSL https://fyy.dev/install.sh | sh
 ```
 
-在容器内，脚本会：
-- 设置 `FYY_RUN_DIR` 为 `$HOME/.fyy/run`（可写的 PID 和 socket 路径）
-- 保持 `fyyd --foreground` 持续运行（加入后不杀死）
-- 跳过系统服务安装
-
-要在容器重启后保持守护进程运行，在 entrypoint 中添加：
+**重启后保持运行**，在 entrypoint 中添加：
 
 ```bash
-export FYY_RUN_DIR="${HOME}/.fyy/run"
+export FYY_RUN_DIR="/tmp/fyy-run"
 mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 ```
 
-Docker Compose 见[Sidecar 配置](../README.zh.md#容器环境)。
+**持久化身份和技能数据**，挂载卷并设置 `FYY_STATE_DIR`：
+
+```bash
+export FYY_RUN_DIR="/tmp/fyy-run"
+export FYY_STATE_DIR="/data/fyy"
+mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
+nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+```
+
+**零侵入看门狗模式**（无需修改 entrypoint）：
+
+```bash
+# 在 sidecar 或定时任务中：
+export FYY_RUN_DIR="/tmp/fyy-run"
+if ! fyy status >/dev/null 2>&1; then
+  nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+  sleep 3
+fi
+```
+
+Docker Compose sidecar 详见[容器环境](../README.zh.md#容器环境)。
+
+**自定义配置：**
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | \
+  FYY_RUN_DIR=/tmp/fyy-run \
+  FYY_STATE_DIR=/data/fyy \
+  sh
+```
 
 ### 验证安装
 

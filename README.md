@@ -35,9 +35,7 @@ curl -fsSL https://fyy.dev/install.sh | sh
 
 This single command downloads fyy, auto-provisions an AuthKey, joins the official mesh network, and installs fyyd as a system service.
 
-**Docker / container environments:** fyy auto-detects containers and adapts — no systemd needed.
-The install script keeps `fyyd --foreground` running and skips service setup.
-See [Container Setup](#container-setup) for details.)
+**Docker / container environments:** fyy auto-detects containers and fully adapts — no systemd needed, socket/PID redirected to tmpfs, daemon kept alive. See [Container Setup](#container-setup) for details.
 
 ### macOS (Homebrew)
 
@@ -51,29 +49,75 @@ Download the latest binary from [Releases](https://github.com/feiyueyun/fyy/rele
 
 ## Container Setup
 
-fyy runs inside Docker containers, Kubernetes pods, and other restricted environments.
+fyy runs inside Docker containers, Kubernetes pods, and other restricted environments where systemd/launchd and root access are unavailable.
 
-The install script auto-detects containers and adapts:
-- Sets `FYY_RUN_DIR` to `$HOME/.fyy/run` (writable PID + socket path)
-- Keeps `fyyd --foreground` running after joining the mesh
-- Skips system service installation (systemd/launchd unavailable)
+### How it works (zero-config)
+
+The install script auto-detects containers and adapts all decisions:
+
+**`FYY_RUN_DIR=/tmp/fyy-run`** — Unix socket and PID file go to tmpfs. This is required because Docker volume drivers (overlayfs, bind mounts) often don't support `chmod` on Unix sockets. `/tmp` is always tmpfs in all container runtimes.
+
+**Daemon stays running** — fyyd is started in background and kept alive for the container's lifetime. On host systems, it's stopped after join because systemd/launchd takes over; in containers, there is no init system, so the daemon runs as a regular process.
+
+**System service skipped** — systemd/launchd don't exist in containers. The container runtime's restart policy (`restart: unless-stopped` in Docker Compose) replaces this.
+
+**PID file safe** — The daemon handles container restart correctly: stale PID files are detected because the new daemon checks if a PID matches its own process before concluding "already running."
+
+### Usage
 
 ```bash
 # Inside a container — works out of the box
 curl -fsSL https://fyy.dev/install.sh | sh
 ```
 
-### Container entrypoint
+### Persisting across restarts (entrypoint)
 
-To keep `fyyd` alive across restarts, add to your entrypoint script:
+Add to your Dockerfile or entrypoint script:
+
+```dockerfile
+# In Dockerfile
+RUN curl -fsSL https://fyy.dev/install.sh | sh
+```
 
 ```bash
-export FYY_RUN_DIR="${HOME}/.fyy/run"
+# In entrypoint script
+export FYY_RUN_DIR="/tmp/fyy-run"
 mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 
 # Start your application
 exec your-app
+```
+
+To persist identity and skill data across restarts, mount a volume and set `FYY_STATE_DIR`:
+
+```bash
+export FYY_STATE_DIR="/data/fyy"
+export FYY_RUN_DIR="/tmp/fyy-run"
+mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
+nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+```
+
+### Zero-invasion watchdog mode
+
+For environments where you **can't modify the entrypoint** (e.g., OpenClaw's container, SaaS platforms), use a sidecar or cron job that checks daemon health:
+
+```bash
+# In a sidecar container (runs every 5 minutes via cron or loop):
+export FYY_RUN_DIR="/tmp/fyy-run"
+if ! fyy status >/dev/null 2>&1; then
+  echo "fyyd not running, restarting..."
+  nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+  sleep 3
+  fyy status
+fi
+```
+
+Or combine with `--skip-join` for reconnection-only (no re-auth):
+
+```bash
+# Re-install fyy without re-joining (faster restart)
+curl -fsSL https://fyy.dev/install.sh | FYY_SKIP_JOIN=1 sh
 ```
 
 ### Docker Compose (sidecar)
@@ -89,7 +133,8 @@ services:
     volumes:
       - fyy_data:/root/.fyy
     environment:
-      - FYY_RUN_DIR=/root/.fyy/run
+      - FYY_RUN_DIR=/tmp/fyy-run
+      - FYY_STATE_DIR=/root/.fyy/data
     command: >
       sh -c "
         curl -fsSL https://fyy.dev/install.sh | sh -s -- --skip-join &&
@@ -98,6 +143,24 @@ services:
 
 volumes:
   fyy_data:
+```
+
+### Customizing auto-configuration
+
+Set these before running the install script to override defaults:
+
+| Variable | Container default | Purpose |
+|---|---|---|
+| `FYY_RUN_DIR` | `/tmp/fyy-run` | Socket + PID (tmpfs recommended) |
+| `FYY_STATE_DIR` | `~/.feiyueyun` | Identity, skills, DB (persistent volume) |
+| `FYY_SKIP_JOIN` | `0` | Set to `1` to skip mesh join |
+
+```bash
+# Example: custom paths with persistent state
+curl -fsSL https://fyy.dev/install.sh | \
+  FYY_RUN_DIR=/tmp/fyy-run \
+  FYY_STATE_DIR=/data/fyy \
+  sh
 ```
 
 ## Quick Start

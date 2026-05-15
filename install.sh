@@ -8,7 +8,8 @@
 #   FYY_SERVER    Control plane address for auto-join (default: https://ts.fyy.dev)
 #   FYY_API       Channel 2 API address for auto-provision (derived from FYY_SERVER)
 #   FYY_SKIP_JOIN Set to 1 to skip auto-provision and network join
-#   FYY_RUN_DIR   Daemon runtime dir (PID file, socket; auto-set in containers)
+#   FYY_RUN_DIR   Daemon runtime dir (PID file, socket; auto-set in containers to /tmp/fyy-run)
+#   FYY_STATE_DIR Override daemon state dir (persistent data; default: ~/.feiyueyun)
 
 set -eu
 
@@ -29,17 +30,25 @@ FYY_SERVER="${FYY_SERVER:-https://ts.fyy.dev}"
 FYY_API="${FYY_API:-}"
 FYY_SKIP_JOIN="${FYY_SKIP_JOIN:-0}"
 
-# --- Container detection ---
+# ---------------------------------------------------------------------------
+# Container detection (performed early so all downstream decisions adapt).
+# ---------------------------------------------------------------------------
 IS_CONTAINER=0
 if [ -f /.dockerenv ] 2>/dev/null || grep -qE 'docker|containerd|kubepods' /proc/1/cgroup 2>/dev/null; then
     IS_CONTAINER=1
 fi
 
-# When in a container, automatically set FYY_RUN_DIR to a writable location.
+# ---- Auto-configure for containers ----
+# FYY_RUN_DIR: runtime ephemeral files (Unix socket, PID file).
+# Must live on tmpfs — some container volume drivers don't support socket chmod.
+# Default: /tmp/fyy-run (tmpfs on all container runtimes).
 FYY_RUN_DIR="${FYY_RUN_DIR:-}"
 if [ "$IS_CONTAINER" = "1" ] && [ -z "$FYY_RUN_DIR" ]; then
-    FYY_RUN_DIR="${HOME}/.fyy/run"
+    FYY_RUN_DIR="/tmp/fyy-run"
 fi
+
+# FYY_STATE_DIR: persistent data (identity, skill cache, DB).
+# Points to ~/.feiyueyun by default. Mount a volume + set FYY_STATE_DIR to persist.
 
 # --- Step 1: Detect OS and architecture ---
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -167,7 +176,6 @@ else
 
         if [ -n "$FYY_RUN_DIR" ]; then
             mkdir -p "$FYY_RUN_DIR"
-            echo "${YELLOW}  Container environment detected — using ${FYY_RUN_DIR} for runtime files.${RESET}"
         fi
 
         FYY_RUN_DIR="$FYY_RUN_DIR" "${INSTALL_DIR}/fyyd" --foreground > /tmp/fyyd.log 2>&1 &
@@ -184,7 +192,7 @@ else
 
         if [ "$IS_CONTAINER" = "1" ]; then
             # In containers: keep daemon running for the lifetime of the container.
-            echo "${GREEN}fyyd running in foreground mode (PID: ${DAEMON_PID}).${RESET}"
+            echo "${GREEN}fyyd running (PID: ${DAEMON_PID}).${RESET}"
             SERVICE_INSTALLED=0
         else
             # On hosts: stop temp daemon, system service will manage it properly.
@@ -233,18 +241,49 @@ echo "  fyyd daemon: ${INSTALL_DIR}/fyyd (symlink)"
 echo ""
 
 if [ "$IS_CONTAINER" = "1" ]; then
-    echo "  Container setup notes:"
-    echo "  - fyyd is running in background (PID: ${DAEMON_PID:-unknown})"
-    echo "  - Runtime dir: ${FYY_RUN_DIR:-${HOME}/.fyy/run}"
-    echo "  - Log file: /tmp/fyyd.log"
+    echo "${BOLD}Container environment detected — auto-configured:${RESET}"
     echo ""
-    echo "  To add to a container entrypoint for auto-start:"
-    echo "    export FYY_RUN_DIR=${FYY_RUN_DIR:-${HOME}/.fyy/run}"
+    echo "  ├─ FYY_RUN_DIR=${FYY_RUN_DIR}  (tmpfs — socket + PID)"
+    echo "  │   Why tmpfs? Unix sockets need a filesystem that supports"
+    echo "  │   special files and permission bits. Most Docker volumes do not."
+    echo "  │   /tmp is always tmpfs in container runtimes."
+    echo "  │   Override: export FYY_RUN_DIR=/your/path before install"
+    echo "  │"
+    echo "  ├─ fyyd running in background (PID: ${DAEMON_PID:-N/A})"
+    echo "  │   Why background? System services (systemd/launchd) are not"
+    echo "  │   available inside containers. The daemon runs as a regular"
+    echo "  │   process and will stop when the container exits."
+    echo "  │"
+    echo "  ├─ System service: SKIPPED"
+    echo "  │   Why? systemd/launchd are host-level init systems unavailable"
+    echo "  │   in containers. Not needed — the container runtime itself"
+    echo "  │   manages process lifecycle via restart policies."
+    echo "  │"
+    echo "  └─ State data: ~/.feiyueyun (ephemeral unless volume-mounted)"
+    echo "      Why? Identity tokens and skill data live here. To persist"
+    echo "      across restarts, mount a volume and set FYY_STATE_DIR."
+    echo ""
+    echo "${BOLD}If the container restarts:${RESET}"
+    echo "  The daemon will stop. To auto-start on boot, add to entrypoint:"
+    echo ""
+    echo "    export FYY_RUN_DIR=${FYY_RUN_DIR}"
     echo "    mkdir -p \${FYY_RUN_DIR} || true"
-    echo "    nohup \${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
+    echo "    nohup ${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
     echo ""
-    echo "  The daemon will keep the mesh connection alive. If the container"
-    echo "  restarts, add the above lines to the entrypoint script."
+    echo "${BOLD}Zero-invasion watchdog (cron mode):${RESET}"
+    echo "  For containers where you cannot modify the entrypoint:"
+    echo ""
+    echo "    # In a sidecar or cron job (runs every 5 minutes):"
+    echo "    export FYY_RUN_DIR=${FYY_RUN_DIR}"
+    echo "    if ! ${INSTALL_DIR}/fyy status >/dev/null 2>&1; then"
+    echo "      echo 'fyyd not running, restarting...'"
+    echo "      nohup ${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
+    echo "      sleep 3"
+    echo "      ${INSTALL_DIR}/fyy status"
+    echo "    fi"
+    echo ""
+    echo "  Already joined? Combine with --skip-join:"
+    echo "    curl -fsSL https://fyy.dev/install.sh | FYY_SKIP_JOIN=1 sh"
 else
     echo "Quick start:"
     echo "  fyy status              Check network connection"

@@ -32,9 +32,7 @@ curl -fsSL https://fyy.dev/install.sh | sh
 
 此命令会自动下载 fyy、获取临时 AuthKey、加入官方 Mesh 网络并注册为系统服务。
 
-**Docker / 容器环境：** fyy 自动检测容器并适配——无需 systemd。
-安装脚本会保持 `fyyd --foreground` 持续运行并跳过服务安装。
-详见[容器环境](#容器环境)。
+**Docker / 容器环境：** fyy 自动检测容器并完全适配——无需 systemd，socket/PID 重定向到 tmpfs，守护进程保持运行。详见[容器环境](#容器环境)。
 
 ### macOS（Homebrew）
 

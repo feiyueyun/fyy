@@ -46,26 +46,60 @@ ln -sf /usr/local/bin/fyy /usr/local/bin/fyyd
 
 ### Docker / Container Environments
 
-fyy auto-detects containers and adapts installation — no systemd needed:
+fyy auto-detects containers and fully adapts — no systemd needed, socket/PID on tmpfs, daemon kept alive.
+
+**What happens automatically:**
+
+| Setting | Auto-value | Why |
+|---|---|---|
+| `FYY_RUN_DIR` | `/tmp/fyy-run` | tmpfs for Unix socket + PID file (Docker volumes don't support socket chmod) |
+| Daemon lifecycle | Kept in background | No systemd/launchd in containers |
+| System service | Skipped | Container runtime handles restart |
+| PID file | Managed safely | Daemon handles stale PID + self-PID edge cases |
 
 ```bash
+# Inside a container — works out of the box
 curl -fsSL https://fyy.dev/install.sh | sh
 ```
 
-Inside a container, the script:
-- Sets `FYY_RUN_DIR` to `$HOME/.fyy/run` (writable PID + socket path)
-- Keeps `fyyd --foreground` running (not killed after join)
-- Skips system service installation
-
-To persist across restarts, add to your container entrypoint:
+**To persist across restarts**, add to entrypoint:
 
 ```bash
-export FYY_RUN_DIR="${HOME}/.fyy/run"
+export FYY_RUN_DIR="/tmp/fyy-run"
 mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 ```
 
-For Docker Compose, see [Sidecar Setup](../README.md#container).
+**To persist identity + skills**, mount a volume and set `FYY_STATE_DIR`:
+
+```bash
+export FYY_RUN_DIR="/tmp/fyy-run"
+export FYY_STATE_DIR="/data/fyy"
+mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
+nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+```
+
+**Zero-invasion watchdog** (no entrypoint modification needed):
+
+```bash
+# In a sidecar or periodic job:
+export FYY_RUN_DIR="/tmp/fyy-run"
+if ! fyy status >/dev/null 2>&1; then
+  nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+  sleep 3
+fi
+```
+
+For Docker Compose sidecar, see [Container Setup](../README.md#container-setup).
+
+**Override defaults:**
+
+```bash
+curl -fsSL https://fyy.dev/install.sh | \
+  FYY_RUN_DIR=/tmp/fyy-run \
+  FYY_STATE_DIR=/data/fyy \
+  sh
+```
 
 ### Verify Installation
 
