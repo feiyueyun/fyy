@@ -82,10 +82,19 @@ if [ -n "${FYY_VERSION:-}" ]; then
 else
     VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
         | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
+
+    # Fallback: follow /releases/latest page redirect (works when API is rate limited)
     if [ -z "$VERSION" ]; then
-        echo "${RED}Error:${RESET} Could not determine latest version from GitHub Releases."
-        echo "Set FYY_VERSION to a specific version, or download manually from:"
-        echo "  https://github.com/${REPO}/releases"
+        echo "${YELLOW}  GitHub API rate limited, resolving via redirect...${RESET}"
+        REDIRECT_URL=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
+            "https://github.com/${REPO}/releases/latest" 2>/dev/null || echo "")
+        VERSION=$(echo "$REDIRECT_URL" | sed -n 's|.*/tag/\(.*\)|\1|p')
+    fi
+
+    if [ -z "$VERSION" ]; then
+        echo "${RED}Error:${RESET} Could not determine latest version."
+        echo "Set FYY_VERSION to a specific version (e.g., v0.1.2-alpha) and retry."
+        echo "Available releases: https://github.com/${REPO}/releases"
         exit 1
     fi
 fi
