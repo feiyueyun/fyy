@@ -5,6 +5,7 @@
 #
 # What this removes:
 #   - fyyd daemon process (if running)
+#   - fyyd-watchdog process + script (if deployed)
 #   - Binaries: /usr/local/bin/fyy, /usr/local/bin/fyyd (or INSTALL_DIR)
 #   - Runtime dir: /tmp/fyy-run (socket + PID), or FYY_RUN_DIR
 #   - System service: systemd (Linux) or launchd (macOS)
@@ -85,6 +86,23 @@ if [ -n "$FYAD_PIDS" ]; then
     kill -9 $FYAD_PIDS 2>/dev/null || true
 fi
 
+# --- Step 3b: Stop watchdog (if running) ---
+WATCHDOG_KILLED=0
+if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/watchdog.pid" ]; then
+    WD_PID=$(cat "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || echo "")
+    if [ -n "$WD_PID" ] && kill -0 "$WD_PID" 2>/dev/null; then
+        kill "$WD_PID" 2>/dev/null || true
+        WATCHDOG_KILLED=1
+    fi
+    rm -f "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || true
+fi
+
+# Also kill any watchdog by process name
+WD_PIDS=$(pgrep -x fyyd-watchdog 2>/dev/null || true)
+if [ -n "$WD_PIDS" ]; then
+    kill $WD_PIDS 2>/dev/null || true
+fi
+
 # --- Step 4: Remove system service (host only) ---
 if [ "$IS_CONTAINER" != "1" ] && command -v "${INSTALL_DIR}/fyy" >/dev/null 2>&1; then
     echo "${BOLD}==>${RESET} Removing system service..."
@@ -94,7 +112,7 @@ fi
 
 # --- Step 5: Remove binaries ---
 echo "${BOLD}==>${RESET} Removing binaries..."
-for bin in "${INSTALL_DIR}/fyy" "${INSTALL_DIR}/fyyd"; do
+for bin in "${INSTALL_DIR}/fyy" "${INSTALL_DIR}/fyyd" "${INSTALL_DIR}/fyyd-watchdog"; do
     if [ -f "$bin" ] || [ -L "$bin" ]; then
         rm -f "$bin"
         echo "  Removed: $bin"
@@ -103,7 +121,7 @@ done
 
 # Also check ~/.local/bin for user-local installs
 for dir in "${HOME}/.local/bin"; do
-    for bin in "${dir}/fyy" "${dir}/fyyd"; do
+    for bin in "${dir}/fyy" "${dir}/fyyd" "${dir}/fyyd-watchdog"; do
         if [ -f "$bin" ] || [ -L "$bin" ]; then
             rm -f "$bin"
             echo "  Removed: $bin"
@@ -156,6 +174,9 @@ if [ "$DAEMON_KILLED" = "1" ]; then
     echo "  Daemon: stopped"
 else
     echo "  Daemon: not running"
+fi
+if [ "$WATCHDOG_KILLED" = "1" ]; then
+    echo "  Watchdog: stopped"
 fi
 echo "  Binaries: removed"
 echo "  Runtime: cleaned"

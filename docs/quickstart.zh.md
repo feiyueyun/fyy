@@ -79,16 +79,8 @@ mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 ```
 
-**零侵入看门狗模式**（无需修改 entrypoint）：
-
-```bash
-# 在 sidecar 或定时任务中：
-export FYY_RUN_DIR="/tmp/fyy-run"
-if ! fyy status >/dev/null 2>&1; then
-  nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
-  sleep 3
-fi
-```
+**自动自愈看门狗**（零侵入，自动部署）：
+容器内安装时自动部署 `fyyd-watchdog`，每 60 秒检查健康状态，崩溃时自动重启。无需修改 entrypoint。
 
 Docker Compose sidecar 详见[容器环境](../README.zh.md#容器环境)。
 

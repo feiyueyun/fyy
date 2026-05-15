@@ -191,9 +191,43 @@ else
         fi
 
         if [ "$IS_CONTAINER" = "1" ]; then
-            # In containers: keep daemon running for the lifetime of the container.
-            echo "${GREEN}fyyd running (PID: ${DAEMON_PID}).${RESET}"
-            SERVICE_INSTALLED=0
+        # In containers: keep daemon running and deploy auto-healing watchdog.
+        echo "${BOLD}==>${RESET} Deploying auto-healing watchdog..."
+
+        WATCHDOG_PATH="${INSTALL_DIR}/fyyd-watchdog"
+        cat > "$WATCHDOG_PATH" << 'WATCHDOG'
+#!/bin/sh
+# fyyd-watchdog — Auto-deployed by fyy install.sh
+set -eu
+FYY_RUN_DIR="${FYY_RUN_DIR:-/tmp/fyy-run}"
+INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+FYY_WATCHDOG_LOG="${FYY_WATCHDOG_LOG:-/tmp/fyyd-watchdog.log}"
+CHECK_INTERVAL="${FYY_WATCHDOG_INTERVAL:-60}"
+echo "$$" > "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || true
+log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*" >> "$FYY_WATCHDOG_LOG"; }
+log "fyyd-watchdog started (PID: $$, check interval: ${CHECK_INTERVAL}s)"
+while true; do
+    if ! FYY_RUN_DIR="$FYY_RUN_DIR" "${INSTALL_DIR}/fyy" status >/dev/null 2>&1; then
+        log "fyyd not responding, restarting..."
+        FP=$(cat "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || echo "")
+        [ -n "$FP" ] && kill "$FP" 2>/dev/null || true; sleep 1
+        rm -f "${FYY_RUN_DIR}/fyyd.sock" "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
+        FYY_RUN_DIR="$FYY_RUN_DIR" nohup "${INSTALL_DIR}/fyyd" --foreground > /tmp/fyyd.log 2>&1 &
+        NP=$!; echo "$NP" > "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
+        log "fyyd restarted (PID: ${NP})"; sleep 5
+    fi
+    sleep "$CHECK_INTERVAL"
+done
+WATCHDOG
+        chmod +x "$WATCHDOG_PATH"
+
+        WATCHDOG_LOG="${FYY_WATCHDOG_LOG:-/tmp/fyyd-watchdog.log}"
+        FYY_RUN_DIR="$FYY_RUN_DIR" INSTALL_DIR="$INSTALL_DIR" nohup "$WATCHDOG_PATH" > /dev/null 2>&1 &
+        WATCHDOG_PID=$!
+        disown "$WATCHDOG_PID" 2>/dev/null || true
+
+        echo "${GREEN}fyyd running (PID: ${DAEMON_PID}) with auto-heal watchdog (PID: ${WATCHDOG_PID}).${RESET}"
+        SERVICE_INSTALLED=0
         else
             # On hosts: stop temp daemon, system service will manage it properly.
             kill "$DAEMON_PID" 2>/dev/null || true
@@ -254,6 +288,11 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "  │   available inside containers. The daemon runs as a regular"
     echo "  │   process and will stop when the container exits."
     echo "  │"
+    echo "  ├─ Auto-heal watchdog running (PID: ${WATCHDOG_PID:-N/A})"
+    echo "  │   Why? Checks fyyd every 60s via fyy status, restarts on crash."
+    echo "  │   Log: /tmp/fyyd-watchdog.log"
+    echo "  │   Ephemeral (tmpfs) — lost on container restart."
+    echo "  │"
     echo "  ├─ System service: SKIPPED"
     echo "  │   Why? systemd/launchd are host-level init systems unavailable"
     echo "  │   in containers. Not needed — the container runtime itself"
@@ -264,26 +303,14 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "      across restarts, mount a volume and set FYY_STATE_DIR."
     echo ""
     echo "${BOLD}If the container restarts:${RESET}"
-    echo "  The daemon will stop. To auto-start on boot, add to entrypoint:"
+    echo "  The watchdog is on tmpfs and will be lost. For auto-heal across"
+    echo "  restarts, add to entrypoint:"
     echo ""
     echo "    export FYY_RUN_DIR=${FYY_RUN_DIR}"
     echo "    mkdir -p \${FYY_RUN_DIR} || true"
     echo "    nohup ${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
     echo ""
-    echo "${BOLD}Zero-invasion watchdog (cron mode):${RESET}"
-    echo "  For containers where you cannot modify the entrypoint:"
-    echo ""
-    echo "    # In a sidecar or cron job (runs every 5 minutes):"
-    echo "    export FYY_RUN_DIR=${FYY_RUN_DIR}"
-    echo "    if ! ${INSTALL_DIR}/fyy status >/dev/null 2>&1; then"
-    echo "      echo 'fyyd not running, restarting...'"
-    echo "      nohup ${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
-    echo "      sleep 3"
-    echo "      ${INSTALL_DIR}/fyy status"
-    echo "    fi"
-    echo ""
-    echo "  Already joined? Combine with --skip-join:"
-    echo "    curl -fsSL https://fyy.dev/install.sh | FYY_SKIP_JOIN=1 sh"
+    echo "  Or use a sidecar: see https://fyy.dev/readme.md#container-setup"
 else
     echo "Quick start:"
     echo "  fyy status              Check network connection"

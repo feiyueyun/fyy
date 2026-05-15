@@ -63,6 +63,8 @@ The install script auto-detects containers and adapts all decisions:
 
 **PID file safe** — The daemon handles container restart correctly: stale PID files are detected because the new daemon checks if a PID matches its own process before concluding "already running."
 
+**Auto-heal watchdog** — A background `fyyd-watchdog` process is deployed automatically. It checks `fyy status` every 60 seconds and restarts fyyd if it's unresponsive. No entrypoint modification needed.
+
 ### Usage
 
 ```bash
@@ -98,27 +100,25 @@ mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 ```
 
-### Zero-invasion watchdog mode
+### Auto-healing watchdog (zero-invasion)
 
-For environments where you **can't modify the entrypoint** (e.g., OpenClaw's container, SaaS platforms), use a sidecar or cron job that checks daemon health:
+When installed inside a container, the install script automatically deploys a
+**watchdog process** (`fyyd-watchdog`) that checks daemon health every 60
+seconds and restarts fyyd if it crashes. No entrypoint modification needed.
 
-```bash
-# In a sidecar container (runs every 5 minutes via cron or loop):
-export FYY_RUN_DIR="/tmp/fyy-run"
-if ! fyy status >/dev/null 2>&1; then
-  echo "fyyd not running, restarting..."
-  nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
-  sleep 3
-  fyy status
-fi
+```
+fyyd-watchdog (PID: N)                   Log: /tmp/fyyd-watchdog.log
+  └─ every 60s → fyy status → ok? → sleep
+                             → fail → kill stale fyyd → restart fyyd
 ```
 
-Or combine with `--skip-join` for reconnection-only (no re-auth):
+The watchdog is at `INSTALL_DIR/fyyd-watchdog` and writes its PID to
+`FYY_RUN_DIR/watchdog.pid` for clean uninstall.
 
-```bash
-# Re-install fyy without re-joining (faster restart)
-curl -fsSL https://fyy.dev/install.sh | FYY_SKIP_JOIN=1 sh
-```
+**Limitation:** Ephemeral (tmpfs) — lost on container restart. Use entrypoint
+or sidecar for persistence across restart.
+
+Customize interval: `curl -fsSL https://fyy.dev/install.sh | FYY_WATCHDOG_INTERVAL=120 sh`
 
 ### Docker Compose (sidecar)
 
