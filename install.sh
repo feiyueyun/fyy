@@ -294,3 +294,5 @@ fi
 echo ""
 echo "Documentation: https://github.com/feiyueyun/fyy"
 echo "Website:       https://fyy.dev"
+echo ""
+echo "To uninstall: curl -fsSL https://fyy.dev/uninstall.sh | sh"

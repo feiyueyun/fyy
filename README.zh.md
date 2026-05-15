@@ -119,6 +119,18 @@ English docs：[README.md](README.md)
 - [Discord](https://discord.gg/feiyueyun)
 - [Twitter/X](https://twitter.com/fyy_dev)
 
+## 卸载
+
+```bash
+# 移除 fyy 二进制、运行时文件和系统服务
+curl -fsSL https://fyy.dev/uninstall.sh | sh
+
+# 同时清除所有状态数据（身份、技能缓存、配置）
+curl -fsSL https://fyy.dev/uninstall.sh | sh -s -- --purge
+```
+
+详见 [`uninstall.sh`](uninstall.sh)。
+
 ## 许可证
 
 FYY CLI 和控制平面 CE 版免费使用。预编译二进制文件基于 [FYY 软件许可证](LICENSE) 分发。

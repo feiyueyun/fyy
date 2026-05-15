@@ -239,6 +239,18 @@ Compatible with [Anthropic Agent Skills](https://github.com/anthropics/agent-ski
 - [Discord](https://discord.gg/feiyueyun)
 - [Twitter/X](https://twitter.com/fyy_dev)
 
+## Uninstall
+
+```bash
+# Remove fyy binaries, runtime files, and system service
+curl -fsSL https://fyy.dev/uninstall.sh | sh
+
+# Also remove all state data (identity, skill cache, config)
+curl -fsSL https://fyy.dev/uninstall.sh | sh -s -- --purge
+```
+
+See [`uninstall.sh`](uninstall.sh) for details.
+
 ## License
 
 FYY CLI and Control Plane CE are free to use. Pre-built binaries are distributed under the [FYY Software License](LICENSE).
