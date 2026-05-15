@@ -211,15 +211,6 @@ RECOVEREOF
         chmod +x "$RECOVER_SCRIPT"
         echo "  Auto-recovery script: ${RECOVER_SCRIPT}"
 
-        # Set up crontab to run recovery every 2 minutes
-        if command -v crontab >/dev/null 2>&1; then
-            EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-            if ! echo "$EXISTING_CRON" | grep -q 'fyy-auto-recover'; then
-                NEW_CRON=$(printf '%s\n%s\n' "$EXISTING_CRON" "*/2 * * * * ${RECOVER_SCRIPT} >/dev/null 2>&1")
-                echo "$NEW_CRON" | crontab - 2>/dev/null && echo "  Cron: every 2 min (for in-container recovery)" || echo "  ${YELLOW}Cron setup skipped (not available).${RESET}"
-            fi
-        fi
-
         SERVICE_INSTALLED=0
         else
             # On hosts: stop temp daemon, system service will manage it properly.
@@ -281,9 +272,12 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "  │   available inside containers. The daemon runs as a regular"
     echo "  │   process and will stop when the container exits."
     echo "  │"
-    echo "  ├─ Auto-recovery: cron (every 2 min)"
-    echo "  │   Script: ~/.fyy/fyy-auto-recover.sh"
-    echo "  │   Will restart fyyd + re-join if the process dies."
+    echo "  ├─ Auto-recovery script: ~/.fyy/fyy-auto-recover.sh"
+    echo "  │"
+    echo "  ├─ [ ACTION REQUIRED ] Register with OpenClaw cron:"
+    echo "  │   Schedule ~/.fyy/fyy-auto-recover.sh to run every 2 minutes"
+    echo "  │   using your platform's cron/scheduler (e.g. OpenClaw cron tool)."
+    echo "  │   Without this, fyyd will NOT restart after a container restart."
     echo "  ├─ System service: SKIPPED"
     echo "  │   Why? systemd/launchd are host-level init systems unavailable"
     echo "  │   in containers. Not needed — the container runtime itself"
@@ -295,8 +289,8 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo ""
     echo ""
     echo "${BOLD}If the container restarts:${RESET}"
-    echo "  fyyd stops with the container. The OpenClaw gateway's cron"
-    echo "  will restart it automatically. See docs for setup."
+    echo "  fyyd stops with the container. Register ~/.fyy/fyy-auto-recover.sh"
+    echo "  with your platform scheduler to restart fyyd automatically."
 else
     echo "Quick start:"
     echo "  fyy status              Check network connection"

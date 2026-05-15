@@ -1,6 +1,6 @@
 # FYY 社区版 (CE)
 
-通过 Docker Compose 免费部署你自己的 FYY 控制平面。
+通过 Docker Compose 免费部署你自己的 FYY 私有技能市场。
 CE 分发包包含运行私有 Agent Skill Mesh 所需的所有核心服务。
 
 ## 架构

@@ -112,17 +112,8 @@ if [ -n "$PIDS" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2: Remove recovery cron + script (set up by install.sh for containers)
+# Step 2: Remove recovery script (created by install.sh for containers)
 # ---------------------------------------------------------------------------
-CRON_CLEANED=0
-if command -v crontab >/dev/null 2>&1; then
-    EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-    NEW_CRON=$(echo "$EXISTING_CRON" | grep -v 'fyy-auto-recover' || true)
-    if [ "$EXISTING_CRON" != "$NEW_CRON" ]; then
-        echo "$NEW_CRON" | crontab - 2>/dev/null && CRON_CLEANED=1
-    fi
-fi
-[ "$CRON_CLEANED" = "1" ] && echo "${BOLD}==>${RESET} Removed fyy-auto-recover cron entry."
 rm -f "${HOME}/.fyy/fyy-auto-recover.sh" 2>/dev/null || true
 
 # ---------------------------------------------------------------------------

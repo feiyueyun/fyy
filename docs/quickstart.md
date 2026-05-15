@@ -218,5 +218,5 @@ For detailed CE documentation, see [`ce/README.md`](../ce/README.md).
 ## What's Next
 
 - [CLI Reference](cli.md) — Full command documentation
-- [Skill Manifest](skill-manifest.md) — Learn how to define AI employee capabilities
+- [Skill Manifest](skill-manifest.md) — Learn how to define AI agent skill capabilities
 - [Framework Integration](framework-integration.md) — Connect your existing AI agents

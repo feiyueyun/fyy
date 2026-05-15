@@ -218,5 +218,5 @@ docker compose up -d
 ## 下一步
 
 - [CLI 参考](cli.md) — 完整命令文档
-- [Skill Manifest](skill-manifest.md) — 了解如何定义 AI 数字员工能力
+- [Skill Manifest](skill-manifest.md) — 了解如何定义 AI 智能体技能
 - [框架集成指南](framework-integration.md) — 连接你现有的 AI Agent

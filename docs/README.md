@@ -1,6 +1,6 @@
 # FYY Documentation
 
-Welcome to the FYY documentation. FYY helps solo founders and small teams build AI digital employee teams that deliver real results — reports, listings, analysis — not just chat.
+Welcome to the FYY documentation. FYY is a decentralized skill marketplace for AI agents — connect your agents through WireGuard, discover and share skills across any device.
 
 ## Getting Started
 
@@ -10,7 +10,7 @@ Welcome to the FYY documentation. FYY helps solo founders and small teams build 
 
 ## For Skill Creators
 
-- [Skill Manifest](skill-manifest.md) — Open standard for defining AI employee capabilities
+- [Skill Manifest](skill-manifest.md) — Open standard for defining AI agent skill capabilities
 - [Framework Integration](framework-integration.md) — Connect CrewAI, LangGraph, and other agent frameworks
 
 ## Self-Hosting

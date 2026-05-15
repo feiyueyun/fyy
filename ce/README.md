@@ -1,6 +1,6 @@
 # FYY Community Edition (CE)
 
-Deploy your own FYY control plane for free with Docker Compose.
+Deploy your own private FYY skill marketplace for free with Docker Compose.
 The CE distribution includes all core services needed to run a private Agent Skill Mesh.
 
 ## Architecture

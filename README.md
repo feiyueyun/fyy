@@ -1,29 +1,31 @@
-# FYY — Your AI Digital Workforce
+# FYY — Decentralized Skill Marketplace for AI Agents
 
-Hire AI digital employees for your one-person company.
-They handle listings, customer service, financial reports, compliance checks —
-and deliver real results, not just chat.
+Connect your AI agents through WireGuard into a secure, decentralized network.
+Discover, install, and run skills shared by agents across any device.
+One command to supercharge your agent.
 
 ## Why FYY
 
-Running a business solo means juggling every role yourself.
-FYY gives you a team of AI digital employees that collaborate on complex tasks
-and deliver finished work — a translated listing ready to publish,
-a compliance report ready to send, a customer reply ready to go.
+AI agents today run in isolated silos — different devices, different frameworks, no standard way to share capabilities across machines. FYY creates a WireGuard-powered mesh that turns fragmented agents into a connected network where skills flow freely.
 
-**Pay for results, not tokens.** Your AI employees are paid like real employees — for deliverables.
+**One command to connect.** Install fyy and your agent is immediately on the mesh — able to discover and use skills shared by other agents.
 
-**Your knowledge stays yours.** Skills run on your own device. Data never leaves your control.
+**Skills run where you want.** Install skills on your own devices and keep data under your control. Or consume skills published by other agents in the mesh — your choice.
 
-**Agent-neutral.** Bring your own Agent framework — CrewAI, LangGraph, Mastra, OpenClaw, or any MCP-compatible agent.
+**Agent-neutral by design.** FYY is the connectivity layer, not an agent framework. Bring your own agent — CrewAI, LangGraph, Mastra, OpenClaw, or any MCP-compatible agent.
+
+**Built on open standards.** Skill Manifest, MCP Protocol, WireGuard mesh, Grants-based access control — a transparent, extensible foundation you can trust.
 
 ## Use Cases
 
-**Cross-border e-commerce (solo seller)**
-Product Research → Multilingual Listing → Compliance Check → Customer Service → Pricing Strategy
+**Agent teams across devices**
+Run specialized agents on different machines — data processing on a workstation, browser automation on a laptop, notifications on a phone — and let them share skills through the FYY mesh.
 
-**Professional service teams**
-Data Processing → Report Generation → Business Analysis → Invoice Delivery
+**Skill marketplace**
+Publish your agent's capabilities as installable skills. Other agents on the mesh discover them, install them, and run them — one command per skill.
+
+**Multi-framework interoperability**
+A CrewAI agent publishes a skill. A LangGraph agent on another machine discovers and runs it. FYY handles the secure connectivity and protocol bridging — you focus on building skills.
 
 ## Installation
 
@@ -194,7 +196,7 @@ fyy skill start weather-lookup
 
 ## Self-Hosting (CE)
 
-FYY Community Edition (CE) lets you run your own control plane for free.
+FYY Community Edition (CE) lets you run your own private skill marketplace for free.
 It ships as a Docker Compose setup — get your own mesh network running in minutes.
 
 See [`ce/`](ce/) for the complete CE distribution with Docker Compose files and setup instructions.
@@ -225,9 +227,9 @@ fyy join --auth-key=<key> --server=https://<your-server>:8080
 
 FYY is built on a small set of open, composable building blocks:
 
-- **Skill Manifest** — open standard for defining AI employee capabilities ([spec](https://github.com/feiyueyun/skill-manifest-spec))
+- **Skill Manifest** — open standard for defining AI agent skill capabilities ([spec](https://github.com/feiyueyun/skill-manifest-spec))
 - **MCP Gateway** — connect any MCP-compatible AI tool
-- **Grants** — fine-grained access control for every AI action
+- **Grants** — fine-grained access control for every skill operation
 - **WireGuard Mesh** — encrypted peer-to-peer networking, your data stays protected
 
 Compatible with [Anthropic Agent Skills](https://github.com/anthropics/agent-skills) (740K+ skills) and [OpenClaw](https://github.com/openclaw) ecosystem.

@@ -1,26 +1,30 @@
-# FYY — 你的 AI 数字员工团队
+# FYY — 面向AI智能体的去中心化技能市场
 
-为一人公司组建 AI 数字员工团队。
-他们处理 Listing 上架、客户服务、财务报表、合规检查——交付真实成果，不只是聊天。
+通过 WireGuard 将你的 AI 智能体连接到安全、去中心化的网络中。
+发现、安装、运行全网智能体共享的技能。一行命令，让你的智能体秒变超级干将。
 
 ## 为什么选择 FYY
 
-独自经营意味着要同时扮演所有角色。
-FYY 给你一支 AI 数字员工团队，协作完成复杂任务并交付成果——一份可直接上架的多语言 Listing、一份可发送的合规报告、一条可发出的客户回复。
+AI 智能体今天运行在各自的孤岛中——不同设备、不同框架，没有标准的方式来跨机器共享能力。FYY 创建了一个 WireGuard 驱动的 Mesh 网络，将分散的智能体变成互联的网络，让技能自由流动。
 
-**按结果付费，不按 Token。** 你的 AI 员工像真人一样按交付物付费。
+**一行命令连接。** 安装 fyy，你的智能体即刻接入 Mesh 网络——能够发现并使用其他智能体共享的技能。
 
-**你的知识归你所有。** 技能运行在你的设备上。数据不出域，知识产权受保护。
+**技能随心运行。** 将技能安装到你自己的设备上，数据尽在掌控。也可以消费网络中其他智能体发布的技能——你的数据你做主。
 
-**Agent 中立。** 自带 Agent 框架——CrewAI、LangGraph、Mastra、OpenClaw 或任何兼容 MCP 的 Agent。
+**智能体中立设计。** FYY 是连接层，不是智能体框架。自带 Agent——CrewAI、LangGraph、Mastra、OpenClaw 或任何兼容 MCP 的智能体。
+
+**基于开放标准构建。** Skill Manifest、MCP 协议、WireGuard Mesh、Grants 访问控制——透明、可扩展的技术底座，值得信赖。
 
 ## 使用场景
 
-**跨境电商（一人卖家）**
-产品调研 → 多语言 Listing → 合规检查 → 客户服务 → 定价策略
+**跨设备智能体团队**
+在不同设备上运行专业智能体——在工作站上处理数据，在笔记本上自动化浏览器，在手机上推送通知——通过 FYY Mesh 无缝共享技能。
 
-**专业服务团队**
-数据处理 → 报告生成 → 商业分析 → 发票交付
+**技能市场**
+将你的智能体能力发布为可安装的技能。Mesh 中的其他智能体一键发现、安装、运行——每个技能只需一行命令。
+
+**跨框架互操作**
+一个 CrewAI 智能体发布技能，另一台机器上的 LangGraph 智能体发现并运行它。FYY 处理安全连接和协议桥接——你只管构建技能。
 
 ## 安装
 
@@ -66,7 +70,7 @@ fyy skill start listing-generator
 
 ## 自托管（CE 社区版）
 
-FYY 社区版（CE）让你免费运行自己的控制平面。通过 Docker Compose 一键部署，几分钟内搭建属于你自己的 Mesh 网络。
+FYY 社区版（CE）让你免费运行自己的私有技能市场。通过 Docker Compose 一键部署，几分钟内搭建属于你自己的 Mesh 网络。
 
 完整的 CE 分发包和部署说明见 [`ce/`](ce/) 目录。
 
@@ -96,9 +100,9 @@ fyy join --auth-key=<key> --server=https://<your-server>:8080
 
 FYY 基于一小组开放、可组合的基础模块：
 
-- **Skill Manifest** — 定义 AI 数字员工能力的开放标准（[规范](https://github.com/feiyueyun/skill-manifest-spec)）
+- **Skill Manifest** — 定义 AI 智能体技能的开放标准（[规范](https://github.com/feiyueyun/skill-manifest-spec)）
 - **MCP Gateway** — 连接任何兼容 MCP 的 AI 工具
-- **Grants** — 每个 AI 操作的细粒度访问控制
+- **Grants** — 每个技能操作的细粒度访问控制
 - **WireGuard Mesh** — 加密点对点组网，数据安全有保障
 
 兼容 [Anthropic Agent Skills](https://github.com/anthropics/agent-skills)（74 万+技能）和 [OpenClaw](https://github.com/openclaw) 生态。

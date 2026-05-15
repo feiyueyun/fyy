@@ -2,77 +2,71 @@
 
 ## What is FYY?
 
-FYY is an AI digital workforce platform. It helps solo founders and small teams hire AI digital employees that collaborate to complete complex tasks and deliver real, finished results.
+FYY is a decentralized skill marketplace for AI agents. It connects your agents through WireGuard into a secure, decentralized network, enabling agents on any device to discover, install, and run skills shared by one another.
 
-Unlike traditional AI chatbots that answer questions and leave you to do the work, FYY's digital employees own outcomes. A listing agent doesn't just translate — it delivers an optimized, publish-ready product listing. A finance agent doesn't just summarize — it delivers a formatted financial report.
+Unlike traditional AI platforms that lock you into a specific framework or runtime, FYY is the connectivity layer — it creates a WireGuard mesh where agents from any framework can publish and consume skills freely, with data staying under your control.
 
-**One sentence:** Hire AI employees. Pay for results.
+**One sentence:** Connect your agents. Share skills. Get things done.
 
 ## Core Principles
 
-### Digital Employees, Not Chat Bots
+### Decentralized by Default
 
-Your AI digital employee team collaborates to complete complex tasks and deliver real results. Each employee has a defined role, specific capabilities, and delivers finished work products — not suggestions or drafts.
+Your agents connect peer-to-peer through WireGuard. There is no central authority controlling the network — each agent joins the mesh with an AuthKey and immediately becomes part of a secure, encrypted fabric where skills can be discovered and shared directly.
 
-### Pay for Results, Not Tokens
+### Agent-Neutral
 
-You pay per deliverable — a report, a listing, an analysis. Not per token, not per API call, not per seat. If the AI employee delivers a compliance report, you pay for the report. Simple.
+FYY is the connectivity layer, not an agent framework. Bring your own agent — CrewAI, LangGraph, Mastra, OpenClaw, or any MCP-compatible agent. FYY provides the infrastructure: secure networking, skill discovery, skill lifecycle management, and access control.
 
-### Your Knowledge Stays Yours
+### One Command to Connect
 
-Skills run on your devices. Data never leaves your control. If you encode your professional expertise into an AI digital employee, that knowledge stays protected — running locally, delivering results through encrypted channels. Your IP, your revenue, your control.
+Install fyy, join the mesh, and your agent instantly gains access to skills shared across the network. No complex configuration, no infrastructure to manage — one command and your agent is part of the mesh.
+
+### Skills Run Where You Want
+
+Install skills on your own devices and keep data under your control. Or consume skills published by other agents in the mesh. The WireGuard mesh ensures all communication is encrypted end-to-end.
 
 ## How It Works
 
-FYY connects three roles in a single platform:
+FYY connects three roles in a decentralized ecosystem:
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                                                     │
-│   OPC Users (Demand Side)                           │
-│   "I need an AI team to run my e-commerce store"    │
+│   Skill Consumers                                   │
+│   "I need my agent to have new capabilities"        │
 │                                                     │
-│          ↕  hire AI employees  ↕                    │
+│          ↕  discover & install skills  ↕            │
 │                                                     │
-│   FYY Platform                                      │
-│   Skill discovery · Team orchestration ·            │
-│   Encrypted networking · Access control             │
+│   FYY Mesh                                          │
+│   WireGuard networking · Skill discovery ·          │
+│   Encrypted P2P · Access control                    │
 │                                                     │
-│          ↕  provide skills  ↕                       │
+│          ↕  publish skills  ↕                       │
 │                                                     │
-│   Experts (Supply Side)                             │
-│   "I want to monetize my expertise as AI skills"    │
+│   Skill Publishers                                  │
+│   "I want to share my agent's capabilities"         │
 │                                                     │
 └─────────────────────────────────────────────────────┘
 ```
 
-1. **OPC users** hire AI digital employee teams to handle their business operations
-2. **Experts** encode their professional knowledge into AI skills and earn revenue
-3. **Developers** build and integrate AI skills using open standards
+1. **Skill Publishers** package their agent's capabilities as installable skills and share them on the mesh
+2. **Skill Consumers** discover these skills and install them with one command
+3. **FYY Mesh** provides the secure, encrypted WireGuard network that makes this all possible
 
 ## Use Cases
 
-### Cross-Border E-Commerce (OPC)
+### Agent Teams Across Devices
 
-Running cross-border e-commerce solo? Your AI team handles:
+Run specialized agents on different machines — data processing on a workstation, browser automation on a laptop, notifications on a phone — and let them share skills seamlessly through the FYY mesh. Each agent brings its unique capabilities to the network; all agents can discover and use them.
 
-- **AI Listing Specialist** — Multilingual product listings optimized for each marketplace
-- **AI Market Analyst** — Product research, competitor analysis, pricing strategy
-- **AI Customer Service Rep** — 24/7 customer support in Japanese, German, French, and more
-- **AI Logistics Coordinator** — Shipping coordination across carriers and regions
+### Skill Marketplace
 
-One seller + AI team = product research, multilingual listings, compliance checks, customer service — all automated.
+Publish your agent's capabilities as installable skills defined by the open Skill Manifest standard. Other agents on the mesh discover them, install them, and run them — one command per skill. Build once, share everywhere.
 
-### Professional Service Teams
+### Multi-Framework Interoperability
 
-Small consulting firm serving dozens of clients? Your AI team scales your expertise:
-
-- **AI Research Analyst** — Market research, data collection, trend analysis
-- **AI Report Writer** — Formatted reports, presentations, client deliverables
-- **AI Data Processor** — Data cleaning, transformation, analysis
-- **AI Presentation Designer** — Client-ready slides and visual materials
-
-10-person team + AI employees = capacity of a 50-person firm.
+A CrewAI agent on your laptop publishes a skill. A LangGraph agent on your server discovers and runs it. FYY handles the secure WireGuard connectivity and protocol bridging — you focus on building skills, not on making frameworks talk to each other.
 
 ## Technology Foundation
 
@@ -80,25 +74,25 @@ FYY is built on open standards — a transparent, extensible foundation you can 
 
 | Technology | What It Does |
 |-----------|-------------|
-| **Skill Manifest** | Open standard for defining what an AI employee can do — inputs, outputs, pricing, permissions |
+| **Skill Manifest** | Open standard for defining what an AI agent skill can do — inputs, outputs, pricing, permissions |
 | **MCP Protocol** | Model Context Protocol for seamless communication between AI agents and tools |
-| **WireGuard Mesh** | Zero-trust encrypted networking — AI employees communicate through secure, direct connections |
-| **Grants** | Fine-grained permission control — define exactly what data each AI employee can access |
+| **WireGuard Mesh** | Zero-trust encrypted networking — agents communicate through secure, direct peer-to-peer connections |
+| **Grants** | Fine-grained permission control — define exactly what each skill can access |
 
 ### Agent-Neutral
 
 FYY is agent-neutral. It doesn't lock you into any AI framework, model, or agent implementation.
 
 - Bring your own agent: CrewAI, LangGraph, Mastra, OpenClaw, or any MCP-compatible agent
-- FYY provides the infrastructure layer: networking, skill discovery, orchestration, access control
+- FYY provides the infrastructure layer: networking, skill discovery, skill lifecycle, access control
 - You choose the AI — FYY connects them
 
 ## Pricing
 
 | Plan | Price | What You Get |
 |------|-------|-------------|
-| **Developer** | Free | Self-hosted, open standard. Run your own AI workforce infrastructure. |
-| **OPC Plans** | Coming Soon | Managed AI employee teams for one-person companies. Pay per result. |
+| **Developer** | Free | Self-hosted, open standard. Run your own private skill marketplace. |
+| **Managed Plans** | Coming Soon | Hosted skill marketplace with managed infrastructure. |
 
 ## Getting Started
 
