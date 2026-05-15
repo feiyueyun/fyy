@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://fyy.dev/install.sh | sh
 #
 # Environment variables:
-#   FYY_VERSION   Specific version to install (default: v0.1.2-alpha)
+#   FYY_VERSION   Specific version to install (default: v0.1.3-alpha)
 #   FYY_INSTALL   Installation directory (default: /usr/local/bin)
 #   FYY_SERVER    Control plane address for auto-join (default: https://ts.fyy.dev)
 #   FYY_API       Channel 2 API address for auto-provision (derived from FYY_SERVER)
@@ -186,7 +186,40 @@ else
         if [ "$IS_CONTAINER" = "1" ]; then
         echo "${GREEN}fyyd running (PID: ${DAEMON_PID}).${RESET}"
         echo "${YELLOW}Skipping system service install (not supported in containers).${RESET}"
-        echo "${YELLOW}Auto-recovery: use OpenClaw cron (see docs).${RESET}"
+
+        # Auto-create recovery script so fyyd restarts if the process dies.
+        mkdir -p "${HOME}/.fyy" 2>/dev/null || true
+        RECOVER_SCRIPT="${HOME}/.fyy/fyy-auto-recover.sh"
+        cat > "$RECOVER_SCRIPT" << RECOVEREOF
+#!/bin/sh
+# fyy-auto-recover — keep fyyd alive in containers (called by cron every 2 min)
+FYY_BIN=${INSTALL_DIR}/fyy
+FYYD_BIN=${INSTALL_DIR}/fyyd
+if ! "\$FYY_BIN" status >/dev/null 2>&1; then
+    export FYY_RUN_DIR="${FYY_RUN_DIR}"
+    mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
+    nohup "\$FYYD_BIN" --foreground > "${FYY_RUN_DIR}/fyyd.log" 2>&1 &
+    sleep 2
+    if ! "\$FYY_BIN" status >/dev/null 2>&1; then
+        AUTH_KEY=\$(curl -s -X POST ${FYY_API}/v1/auth/auto-provision-authkey \
+            -H "Content-Type: application/json" -d '{}' \
+            | sed 's/.*"auth_key"[^"]*"\\([^"]*\\)".*/\\1/')
+        [ -n "\$AUTH_KEY" ] && "\$FYY_BIN" join --auth-key="\$AUTH_KEY" --server=${FYY_SERVER}
+    fi
+fi
+RECOVEREOF
+        chmod +x "$RECOVER_SCRIPT"
+        echo "  Auto-recovery script: ${RECOVER_SCRIPT}"
+
+        # Set up crontab to run recovery every 2 minutes
+        if command -v crontab >/dev/null 2>&1; then
+            EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+            if ! echo "$EXISTING_CRON" | grep -q 'fyy-auto-recover'; then
+                NEW_CRON=$(printf '%s\n%s\n' "$EXISTING_CRON" "*/2 * * * * ${RECOVER_SCRIPT} >/dev/null 2>&1")
+                echo "$NEW_CRON" | crontab - 2>/dev/null && echo "  Cron: every 2 min (for in-container recovery)" || echo "  ${YELLOW}Cron setup skipped (not available).${RESET}"
+            fi
+        fi
+
         SERVICE_INSTALLED=0
         else
             # On hosts: stop temp daemon, system service will manage it properly.
@@ -248,9 +281,9 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "  │   available inside containers. The daemon runs as a regular"
     echo "  │   process and will stop when the container exits."
     echo "  │"
-    echo "  ├─ Auto-recovery: use OpenClaw cron"
-    echo "  │   See https://fyy.dev/readme.md#openclaw-cron-integration"
-    echo "  │"
+    echo "  ├─ Auto-recovery: cron (every 2 min)"
+    echo "  │   Script: ~/.fyy/fyy-auto-recover.sh"
+    echo "  │   Will restart fyyd + re-join if the process dies."
     echo "  ├─ System service: SKIPPED"
     echo "  │   Why? systemd/launchd are host-level init systems unavailable"
     echo "  │   in containers. Not needed — the container runtime itself"

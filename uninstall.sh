@@ -112,7 +112,21 @@ if [ -n "$PIDS" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 2: Remove system service (host only)
+# Step 2: Remove recovery cron + script (set up by install.sh for containers)
+# ---------------------------------------------------------------------------
+CRON_CLEANED=0
+if command -v crontab >/dev/null 2>&1; then
+    EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+    NEW_CRON=$(echo "$EXISTING_CRON" | grep -v 'fyy-auto-recover' || true)
+    if [ "$EXISTING_CRON" != "$NEW_CRON" ]; then
+        echo "$NEW_CRON" | crontab - 2>/dev/null && CRON_CLEANED=1
+    fi
+fi
+[ "$CRON_CLEANED" = "1" ] && echo "${BOLD}==>${RESET} Removed fyy-auto-recover cron entry."
+rm -f "${HOME}/.fyy/fyy-auto-recover.sh" 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# Step 3: Remove system service (host only)
 # ---------------------------------------------------------------------------
 if [ "$IS_CONTAINER" != "1" ] && [ -n "$INSTALL_DIR" ] && [ -x "${INSTALL_DIR}/fyy" ]; then
     echo "${BOLD}==>${RESET} Removing system service..."
@@ -121,7 +135,7 @@ if [ "$IS_CONTAINER" != "1" ] && [ -n "$INSTALL_DIR" ] && [ -x "${INSTALL_DIR}/f
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: Remove binaries
+# Step 4: Remove binaries
 # ---------------------------------------------------------------------------
 echo "${BOLD}==>${RESET} Removing binaries..."
 for dir in "${INSTALL_DIR}" "${HOME}/.local/bin"; do
@@ -135,7 +149,7 @@ for dir in "${INSTALL_DIR}" "${HOME}/.local/bin"; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 4: Remove runtime dir
+# Step 5: Remove runtime dir
 # ---------------------------------------------------------------------------
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -d "$FYY_RUN_DIR" ]; then
     echo "${BOLD}==>${RESET} Removing runtime directory..."
@@ -150,7 +164,7 @@ for d in /tmp/fyy-run "${HOME}/.fyy/run"; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 5: Remove config + state
+# Step 6: Remove config + state
 # ---------------------------------------------------------------------------
 # Config file lives at ~/.fyy/config.yaml (not in state dir)
 rm -f "${HOME}/.fyy/config.yaml" "${HOME}/.fyy/config.json" 2>/dev/null || true
