@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://fyy.dev/install.sh | sh
 #
 # Environment variables:
-#   FYY_VERSION   Specific version to install (default: latest)
+#   FYY_VERSION   Specific version to install (default: v0.1.2-alpha)
 #   FYY_INSTALL   Installation directory (default: /usr/local/bin)
 #   FYY_SERVER    Control plane address for auto-join (default: https://ts.fyy.dev)
 #   FYY_API       Channel 2 API address for auto-provision (derived from FYY_SERVER)
@@ -77,27 +77,7 @@ esac
 PLATFORM="${GOOS}-${GOARCH}"
 
 # --- Step 2: Determine version ---
-if [ -n "${FYY_VERSION:-}" ]; then
-    VERSION="$FYY_VERSION"
-else
-    VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-        | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
-
-    # Fallback: follow /releases/latest page redirect (works when API is rate limited)
-    if [ -z "$VERSION" ]; then
-        echo "${YELLOW}  GitHub API rate limited, resolving via redirect...${RESET}"
-        REDIRECT_URL=$(curl -fsSLI -o /dev/null -w '%{url_effective}' \
-            "https://github.com/${REPO}/releases/latest" 2>/dev/null || echo "")
-        VERSION=$(echo "$REDIRECT_URL" | sed -n 's|.*/tag/\(.*\)|\1|p')
-    fi
-
-    if [ -z "$VERSION" ]; then
-        echo "${RED}Error:${RESET} Could not determine latest version."
-        echo "Set FYY_VERSION to a specific version (e.g., v0.1.2-alpha) and retry."
-        echo "Available releases: https://github.com/${REPO}/releases"
-        exit 1
-    fi
-fi
+VERSION="${FYY_VERSION:-v0.1.2-alpha}"
 
 # --- Step 3: Check if already installed ---
 already_installed=0
@@ -200,62 +180,9 @@ else
         fi
 
         if [ "$IS_CONTAINER" = "1" ]; then
-        # In containers: deploy auto-healing watchdog.
-        # Tries cron first (persists across restarts), falls back to
-        # background process (ephemeral, lost on restart).
-        echo "${BOLD}==>${RESET} Deploying auto-healing watchdog..."
-
-        WATCHDOG_PATH="${INSTALL_DIR}/fyyd-watchdog"
-        cat > "$WATCHDOG_PATH" << 'WDEOF'
-#!/bin/sh
-# fyyd-watchdog — Auto-deployed by fyy install.sh
-set -eu
-FYY_RUN_DIR="${FYY_RUN_DIR:-/tmp/fyy-run}"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-FYY_WATCHDOG_LOG="${FYY_WATCHDOG_LOG:-/tmp/fyyd-watchdog.log}"
-echo "$$" > "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || true
-log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*" >> "$FYY_WATCHDOG_LOG"; }
-check() {
-    if ! FYY_RUN_DIR="$FYY_RUN_DIR" "${INSTALL_DIR}/fyy" status >/dev/null 2>&1; then
-        log "fyyd not responding, restarting..."
-        FP=$(cat "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || echo "")
-        [ -n "$FP" ] && kill "$FP" 2>/dev/null || true; sleep 1
-        rm -f "${FYY_RUN_DIR}/fyyd.sock" "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
-        FYY_RUN_DIR="$FYY_RUN_DIR" nohup "${INSTALL_DIR}/fyyd" --foreground > /tmp/fyyd.log 2>&1 &
-        NP=$!; echo "$NP" > "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
-        log "fyyd restarted (PID: ${NP})"; sleep 5
-    fi
-}
-case "${1:-}" in --once|-1) check ;; *)
-    log "fyyd-watchdog started (PID: $$)"
-    while true; do check; sleep "${FYY_WATCHDOG_INTERVAL:-60}"; done
-;; esac
-WDEOF
-        chmod +x "$WATCHDOG_PATH"
-
-        WATCHDOG_MODE="process"
-        # Try cron (persists across container restarts)
-        if command -v crontab >/dev/null 2>&1; then
-            CRON_EXPR="* * * * * FYY_RUN_DIR=${FYY_RUN_DIR} INSTALL_DIR=${INSTALL_DIR} ${WATCHDOG_PATH} --once"
-            EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-            if ! echo "$EXISTING_CRON" | grep -q 'fyyd-watchdog'; then
-                (echo "$EXISTING_CRON"; echo "$CRON_EXPR") | crontab - 2>/dev/null && WATCHDOG_MODE="cron" || true
-            else
-                WATCHDOG_MODE="cron"
-            fi
-        fi
-
-        if [ "$WATCHDOG_MODE" = "cron" ]; then
-            FYY_RUN_DIR="$FYY_RUN_DIR" INSTALL_DIR="$INSTALL_DIR" "$WATCHDOG_PATH" --once
-            echo "  Watchdog: cron (check every 1 min, persists across restart)"
-        else
-            FYY_RUN_DIR="$FYY_RUN_DIR" INSTALL_DIR="$INSTALL_DIR" nohup "$WATCHDOG_PATH" > /dev/null 2>&1 &
-            WATCHDOG_PID=$!
-            disown "$WATCHDOG_PID" 2>/dev/null || true
-            echo "  Watchdog: background process (PID: ${WATCHDOG_PID}, ephemeral)"
-        fi
-
-        echo "${GREEN}fyyd running (PID: ${DAEMON_PID}) with auto-heal watchdog.${RESET}"
+        echo "${GREEN}fyyd running (PID: ${DAEMON_PID}).${RESET}"
+        echo "${YELLOW}Skipping system service install (not supported in containers).${RESET}"
+        echo "${YELLOW}Auto-recovery: use OpenClaw cron (see docs).${RESET}"
         SERVICE_INSTALLED=0
         else
             # On hosts: stop temp daemon, system service will manage it properly.
@@ -317,9 +244,8 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "  │   available inside containers. The daemon runs as a regular"
     echo "  │   process and will stop when the container exits."
     echo "  │"
-    echo "  ├─ Auto-heal watchdog (${WATCHDOG_MODE})"
-    echo "  │   Checks fyyd every 60s, restarts on crash."
-    echo "  │   Log: /tmp/fyyd-watchdog.log"
+    echo "  ├─ Auto-recovery: use OpenClaw cron"
+    echo "  │   See https://fyy.dev/readme.md#openclaw-cron-integration"
     echo "  │"
     echo "  ├─ System service: SKIPPED"
     echo "  │   Why? systemd/launchd are host-level init systems unavailable"
@@ -330,20 +256,10 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "      Why? Identity tokens and skill data live here. To persist"
     echo "      across restarts, mount a volume and set FYY_STATE_DIR."
     echo ""
-    if [ "$WATCHDOG_MODE" = "cron" ]; then
-    echo "${BOLD}Watchdog persists across restarts${RESET} — cron job installed."
-    echo "No entrypoint modification needed."
-    else
+    echo ""
     echo "${BOLD}If the container restarts:${RESET}"
-    echo "  The watchdog process runs on tmpfs and will be lost. To auto-start"
-    echo "  on boot, add to entrypoint:"
-    echo ""
-    echo "    export FYY_RUN_DIR=${FYY_RUN_DIR}"
-    echo "    mkdir -p \${FYY_RUN_DIR} || true"
-    echo "    nohup ${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
-    echo ""
-    echo "  Or use a sidecar: see https://fyy.dev/readme.md#container-setup"
-    fi
+    echo "  fyyd stops with the container. The OpenClaw gateway's cron"
+    echo "  will restart it automatically. See docs for setup."
 else
     echo "Quick start:"
     echo "  fyy status              Check network connection"
@@ -362,18 +278,13 @@ cat > "${MANIFEST_DIR}/manifest.json" << MANIFEST
   "container": $([ "$IS_CONTAINER" = "1" ] && echo "true" || echo "false"),
   "binaries": {
     "fyy": "${INSTALL_DIR}/fyy",
-    "fyyd": "${INSTALL_DIR}/fyyd",
-    "watchdog": "${INSTALL_DIR}/fyyd-watchdog"
+    "fyyd": "${INSTALL_DIR}/fyyd"
   },
   "paths": {
     "install_dir": "${INSTALL_DIR}",
     "run_dir": "${FYY_RUN_DIR}",
     "state_dir": "${FYY_STATE_DIR}",
     "config_dir": "${FYY_STATE_DIR}"
-  },
-  "watchdog": {
-    "mode": "${WATCHDOG_MODE:-none}",
-    "path": "${INSTALL_DIR}/fyyd-watchdog"
   }
 }
 MANIFEST

@@ -79,8 +79,7 @@ mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 ```
 
-**Auto-heal watchdog** (zero-invasion, deployed automatically):
-Inside containers, the install script deploys a background `fyyd-watchdog` that checks health every 60s and restarts on crash. No entrypoint modification needed.
+**OpenClaw cron integration** — see [Container Setup](../README.md#openclaw-cron-integration) for auto-recovery via the gateway's built-in cron.
 
 For Docker Compose sidecar, see [Container Setup](../README.md#container-setup).
 

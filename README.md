@@ -100,25 +100,34 @@ mkdir -p "${FYY_RUN_DIR}" "${FYY_STATE_DIR}" 2>/dev/null || true
 nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
 ```
 
-### Auto-healing watchdog (zero-invasion)
+### OpenClaw cron integration
 
-When installed inside a container, the install script automatically deploys a
-**watchdog process** (`fyyd-watchdog`) that checks daemon health every 60
-seconds and restarts fyyd if it crashes. No entrypoint modification needed.
+In OpenClaw and its variants, the gateway has a built-in cron scheduler
+that survives container restarts. Use it to keep fyyd alive:
 
+Create `.fyy/fyy-auto-recover.sh` in the agent workspace:
+
+```bash
+#!/bin/sh
+# fyy-auto-recover — called by OpenClaw cron every 2 minutes
+if ! fyy status >/dev/null 2>&1; then
+    export FYY_RUN_DIR="/tmp/fyy-run"
+    mkdir -p "${FYY_RUN_DIR}" 2>/dev/null || true
+    nohup fyyd --foreground > /tmp/fyyd.log 2>&1 &
+
+    # If not on the mesh yet, get an auth key and join
+    sleep 2
+    if ! fyy status >/dev/null 2>&1; then
+        AUTH_KEY=$(curl -s -X POST https://api.fyy.dev/v1/auth/auto-provision-authkey \
+            -H "Content-Type: application/json" -d '{}' \
+            | sed 's/.*"auth_key"[^"]*"\([^"]*\)".*/\1/')
+        [ -n "$AUTH_KEY" ] && fyy join --auth-key="$AUTH_KEY" --server=https://ts.fyy.dev
+    fi
+fi
 ```
-fyyd-watchdog (PID: N)                   Log: /tmp/fyyd-watchdog.log
-  └─ every 60s → fyy status → ok? → sleep
-                             → fail → kill stale fyyd → restart fyyd
-```
 
-The watchdog is at `INSTALL_DIR/fyyd-watchdog` and writes its PID to
-`FYY_RUN_DIR/watchdog.pid` for clean uninstall.
-
-**Limitation:** Ephemeral (tmpfs) — lost on container restart. Use entrypoint
-or sidecar for persistence across restart.
-
-Customize interval: `curl -fsSL https://fyy.dev/install.sh | FYY_WATCHDOG_INTERVAL=120 sh`
+Configure the OpenClaw gateway to run this script on a 2-minute schedule.
+No system crontab, no background watchdog, no entrypoint modification needed.
 
 ### Docker Compose (sidecar)
 
