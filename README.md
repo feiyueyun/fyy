@@ -161,7 +161,7 @@ Set these before running the install script to override defaults:
 | Variable | Container default | Purpose |
 |---|---|---|
 | `FYY_RUN_DIR` | `/tmp/fyy-run` | Socket + PID (tmpfs recommended) |
-| `FYY_STATE_DIR` | `~/.feiyueyun` | Identity, skills, DB (persistent volume) |
+| `FYY_STATE_DIR` | `~/.fyy/state` | Identity, skills, DB (persistent volume) |
 | `FYY_SKIP_JOIN` | `0` | Set to `1` to skip mesh join |
 
 ```bash

@@ -10,16 +10,14 @@
 #
 # What this removes:
 #   - fyyd daemon process (if running)
-#   - fyyd-watchdog cron job (if installed)
-#   - fyyd-watchdog process + script (if deployed)
-#   - Binaries: fyy, fyyd, fyyd-watchdog
-#   - Runtime dir: socket, PID, watchdog PID
+#   - Binaries: fyy, fyyd
+#   - Runtime dir: socket, PID
 #   - System service: systemd (Linux) or launchd (macOS)
-#   - Config files: ~/.feiyueyun/config.*
+#   - Config files: ~/.fyy/config.yaml
 #
 # With --purge, also removes all state data:
-#   - ~/.feiyueyun/ (identity tokens, skill cache, local DB)
-#   - ~/.fyy/ (manifest)
+#   - ~/.fyy/state/ (identity tokens, skill cache, local DB)
+#   - ~/.fyy/ (manifest, config)
 
 set -eu
 
@@ -51,7 +49,6 @@ IS_CONTAINER=0
 INSTALL_DIR=""
 FYY_RUN_DIR=""
 FYY_STATE_DIR=""
-WATCHDOG_MODE=""
 
 if [ -f "$MANIFEST" ]; then
     echo "${BOLD}==>${RESET} Reading install manifest: ${MANIFEST}"
@@ -62,7 +59,6 @@ if [ -f "$MANIFEST" ]; then
     INSTALL_DIR=$(sed -n 's/.*"install_dir":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
     FYY_RUN_DIR=$(sed -n 's/.*"run_dir":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
     FYY_STATE_DIR=$(sed -n 's/.*"state_dir":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
-    WATCHDOG_MODE=$(sed -n 's/.*"mode":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
 
     echo "  Loaded from manifest:"
     echo "    install_dir: ${INSTALL_DIR:-N/A}"
@@ -89,22 +85,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 1: Remove cron entry (if installed)
-# ---------------------------------------------------------------------------
-if command -v crontab >/dev/null 2>&1; then
-    CRON_CLEANED=0
-    EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-    NEW_CRON=$(echo "$EXISTING_CRON" | grep -v 'fyyd-watchdog' || true)
-    if [ "$EXISTING_CRON" != "$NEW_CRON" ]; then
-        echo "$NEW_CRON" | crontab - 2>/dev/null && CRON_CLEANED=1
-    fi
-    if [ "$CRON_CLEANED" = "1" ]; then
-        echo "${BOLD}==>${RESET} Removed fyyd-watchdog cron entry."
-    fi
-fi
-
-# ---------------------------------------------------------------------------
-# Step 2: Stop daemon + watchdog
+# Step 1: Stop daemon
 # ---------------------------------------------------------------------------
 DAEMON_KILLED=0
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/fyyd.pid" ]; then
@@ -125,25 +106,13 @@ if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/fyyd.pid" ]; then
     rm -f "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
 fi
 
-for PROC in fyyd fyyd-watchdog; do
-    PIDS=$(pgrep -x "$PROC" 2>/dev/null || true)
-    if [ -n "$PIDS" ]; then
-        kill $PIDS 2>/dev/null || true
-    fi
-done
-
-WATCHDOG_KILLED=0
-if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/watchdog.pid" ]; then
-    WD_PID=$(cat "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || echo "")
-    if [ -n "$WD_PID" ] && kill -0 "$WD_PID" 2>/dev/null; then
-        kill "$WD_PID" 2>/dev/null || true
-        WATCHDOG_KILLED=1
-    fi
-    rm -f "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || true
+PIDS=$(pgrep -x fyyd 2>/dev/null || true)
+if [ -n "$PIDS" ]; then
+    kill $PIDS 2>/dev/null || true
 fi
 
 # ---------------------------------------------------------------------------
-# Step 3: Remove system service (host only)
+# Step 2: Remove system service (host only)
 # ---------------------------------------------------------------------------
 if [ "$IS_CONTAINER" != "1" ] && [ -n "$INSTALL_DIR" ] && [ -x "${INSTALL_DIR}/fyy" ]; then
     echo "${BOLD}==>${RESET} Removing system service..."
@@ -152,12 +121,12 @@ if [ "$IS_CONTAINER" != "1" ] && [ -n "$INSTALL_DIR" ] && [ -x "${INSTALL_DIR}/f
 fi
 
 # ---------------------------------------------------------------------------
-# Step 4: Remove binaries
+# Step 3: Remove binaries
 # ---------------------------------------------------------------------------
 echo "${BOLD}==>${RESET} Removing binaries..."
 for dir in "${INSTALL_DIR}" "${HOME}/.local/bin"; do
     [ -n "$dir" ] || continue
-    for bin in "${dir}/fyy" "${dir}/fyyd" "${dir}/fyyd-watchdog"; do
+    for bin in "${dir}/fyy" "${dir}/fyyd"; do
         if [ -f "$bin" ] || [ -L "$bin" ]; then
             rm -f "$bin"
             echo "  Removed: ${bin}"
@@ -166,7 +135,7 @@ for dir in "${INSTALL_DIR}" "${HOME}/.local/bin"; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 5: Remove runtime dir
+# Step 4: Remove runtime dir
 # ---------------------------------------------------------------------------
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -d "$FYY_RUN_DIR" ]; then
     echo "${BOLD}==>${RESET} Removing runtime directory..."
@@ -181,22 +150,23 @@ for d in /tmp/fyy-run "${HOME}/.fyy/run"; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 6: Remove config + state
+# Step 5: Remove config + state
 # ---------------------------------------------------------------------------
-CONFIG_DIR="${FYY_STATE_DIR:-${HOME}/.feiyueyun}"
-if [ -d "$CONFIG_DIR" ]; then
-    rm -f "${CONFIG_DIR}/config.yaml" "${CONFIG_DIR}/config.json" 2>/dev/null || true
+# Config file lives at ~/.fyy/config.yaml (not in state dir)
+rm -f "${HOME}/.fyy/config.yaml" "${HOME}/.fyy/config.json" 2>/dev/null || true
 
+STATE_DIR="${FYY_STATE_DIR:-${HOME}/.fyy/state}"
+if [ -d "$STATE_DIR" ]; then
     if [ "$PURGE" = "1" ]; then
         echo "${BOLD}==>${RESET} Purging all fyy state data..."
-        rm -rf "$CONFIG_DIR"
-        echo "  Removed: ${CONFIG_DIR}"
+        rm -rf "$STATE_DIR"
+        echo "  Removed: ${STATE_DIR}"
         if [ -d "${HOME}/.fyy" ]; then
             rm -rf "${HOME}/.fyy" 2>/dev/null || true
             echo "  Removed: ${HOME}/.fyy (manifest)"
         fi
     else
-        REMAINING=$(find "$CONFIG_DIR" -mindepth 1 2>/dev/null | head -5 || echo "")
+        REMAINING=$(find "$STATE_DIR" -mindepth 1 2>/dev/null | head -5 || echo "")
         if [ -n "$REMAINING" ]; then
             KEPT_SOMETHING=1
         fi
@@ -219,9 +189,6 @@ if [ "$DAEMON_KILLED" = "1" ]; then
 else
     echo "  Daemon: not running"
 fi
-if [ "$WATCHDOG_KILLED" = "1" ]; then
-    echo "  Watchdog: stopped"
-fi
 echo "  Binaries: removed"
 echo "  Runtime: cleaned"
 
@@ -229,7 +196,7 @@ if [ "$PURGE" = "1" ]; then
     echo "  State data: purged"
 else
     if [ "$KEPT_SOMETHING" = "1" ]; then
-        echo "  State data: kept at ${CONFIG_DIR}"
+        echo "  State data: kept at ${STATE_DIR}"
         echo "    (re-run with --purge to remove)"
     fi
 fi

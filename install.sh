@@ -9,7 +9,7 @@
 #   FYY_API       Channel 2 API address for auto-provision (derived from FYY_SERVER)
 #   FYY_SKIP_JOIN Set to 1 to skip auto-provision and network join
 #   FYY_RUN_DIR   Daemon runtime dir (PID file, socket; auto-set in containers to /tmp/fyy-run)
-#   FYY_STATE_DIR Override daemon state dir (persistent data; default: ~/.feiyueyun)
+#   FYY_STATE_DIR Override daemon state dir (persistent data; default: ~/.fyy/state)
 
 set -eu
 
@@ -38,17 +38,21 @@ if [ -f /.dockerenv ] 2>/dev/null || grep -qE 'docker|containerd|kubepods' /proc
     IS_CONTAINER=1
 fi
 
-# ---- Auto-configure for containers ----
-# FYY_RUN_DIR: runtime ephemeral files (Unix socket, PID file).
-# Must live on tmpfs — some container volume drivers don't support socket chmod.
-# Default: /tmp/fyy-run (tmpfs on all container runtimes).
+# ---- Auto-configure FYY_RUN_DIR ----
+# FYY_RUN_DIR: runtime ephemeral files (Unix socket, PID file, daemon log).
+# In containers, must live on tmpfs — some volume drivers don't support sockets.
+# On hosts, defaults to ~/.fyy/run (same as daemon's internal default).
 FYY_RUN_DIR="${FYY_RUN_DIR:-}"
-if [ "$IS_CONTAINER" = "1" ] && [ -z "$FYY_RUN_DIR" ]; then
-    FYY_RUN_DIR="/tmp/fyy-run"
+if [ -z "$FYY_RUN_DIR" ]; then
+    if [ "$IS_CONTAINER" = "1" ]; then
+        FYY_RUN_DIR="/tmp/fyy-run"
+    else
+        FYY_RUN_DIR="${HOME}/.fyy/run"
+    fi
 fi
 
 # FYY_STATE_DIR: persistent data (identity, skill cache, DB).
-# Points to ~/.feiyueyun by default. Mount a volume + set FYY_STATE_DIR to persist.
+# Points to ~/.fyy/state by default. Mount a volume + set FYY_STATE_DIR to persist.
 
 # --- Step 1: Detect OS and architecture ---
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -77,7 +81,7 @@ esac
 PLATFORM="${GOOS}-${GOARCH}"
 
 # --- Step 2: Determine version ---
-VERSION="${FYY_VERSION:-v0.1.2-alpha}"
+VERSION="${FYY_VERSION:-v0.1.3-alpha}"
 
 # --- Step 3: Check if already installed ---
 already_installed=0
@@ -167,7 +171,7 @@ else
             mkdir -p "$FYY_RUN_DIR"
         fi
 
-        FYY_RUN_DIR="$FYY_RUN_DIR" "${INSTALL_DIR}/fyyd" --foreground > /tmp/fyyd.log 2>&1 &
+        FYY_RUN_DIR="$FYY_RUN_DIR" "${INSTALL_DIR}/fyyd" --foreground > "${FYY_RUN_DIR}/fyyd.log" 2>&1 &
         DAEMON_PID=$!
         sleep 3
 
@@ -252,7 +256,7 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "  │   in containers. Not needed — the container runtime itself"
     echo "  │   manages process lifecycle via restart policies."
     echo "  │"
-    echo "  └─ State data: ~/.feiyueyun (ephemeral unless volume-mounted)"
+    echo "  └─ State data: ~/.fyy/state (ephemeral unless volume-mounted)"
     echo "      Why? Identity tokens and skill data live here. To persist"
     echo "      across restarts, mount a volume and set FYY_STATE_DIR."
     echo ""
@@ -270,7 +274,7 @@ fi
 # --- Step 9: Write install manifest for precise uninstall ---
 MANIFEST_DIR="${HOME}/.fyy"
 mkdir -p "$MANIFEST_DIR" 2>/dev/null || true
-FYY_STATE_DIR="${FYY_STATE_DIR:-${HOME}/.feiyueyun}"
+FYY_STATE_DIR="${FYY_STATE_DIR:-${HOME}/.fyy/state}"
 cat > "${MANIFEST_DIR}/manifest.json" << MANIFEST
 {
   "version": "${VERSION}",
@@ -284,7 +288,7 @@ cat > "${MANIFEST_DIR}/manifest.json" << MANIFEST
     "install_dir": "${INSTALL_DIR}",
     "run_dir": "${FYY_RUN_DIR}",
     "state_dir": "${FYY_STATE_DIR}",
-    "config_dir": "${FYY_STATE_DIR}"
+    "config_dir": "${HOME}/.fyy"
   }
 }
 MANIFEST
