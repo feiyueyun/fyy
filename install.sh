@@ -191,22 +191,22 @@ else
         fi
 
         if [ "$IS_CONTAINER" = "1" ]; then
-        # In containers: keep daemon running and deploy auto-healing watchdog.
+        # In containers: deploy auto-healing watchdog.
+        # Tries cron first (persists across restarts), falls back to
+        # background process (ephemeral, lost on restart).
         echo "${BOLD}==>${RESET} Deploying auto-healing watchdog..."
 
         WATCHDOG_PATH="${INSTALL_DIR}/fyyd-watchdog"
-        cat > "$WATCHDOG_PATH" << 'WATCHDOG'
+        cat > "$WATCHDOG_PATH" << 'WDEOF'
 #!/bin/sh
 # fyyd-watchdog — Auto-deployed by fyy install.sh
 set -eu
 FYY_RUN_DIR="${FYY_RUN_DIR:-/tmp/fyy-run}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 FYY_WATCHDOG_LOG="${FYY_WATCHDOG_LOG:-/tmp/fyyd-watchdog.log}"
-CHECK_INTERVAL="${FYY_WATCHDOG_INTERVAL:-60}"
 echo "$$" > "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || true
 log() { echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] $*" >> "$FYY_WATCHDOG_LOG"; }
-log "fyyd-watchdog started (PID: $$, check interval: ${CHECK_INTERVAL}s)"
-while true; do
+check() {
     if ! FYY_RUN_DIR="$FYY_RUN_DIR" "${INSTALL_DIR}/fyy" status >/dev/null 2>&1; then
         log "fyyd not responding, restarting..."
         FP=$(cat "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || echo "")
@@ -216,17 +216,37 @@ while true; do
         NP=$!; echo "$NP" > "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
         log "fyyd restarted (PID: ${NP})"; sleep 5
     fi
-    sleep "$CHECK_INTERVAL"
-done
-WATCHDOG
+}
+case "${1:-}" in --once|-1) check ;; *)
+    log "fyyd-watchdog started (PID: $$)"
+    while true; do check; sleep "${FYY_WATCHDOG_INTERVAL:-60}"; done
+;; esac
+WDEOF
         chmod +x "$WATCHDOG_PATH"
 
-        WATCHDOG_LOG="${FYY_WATCHDOG_LOG:-/tmp/fyyd-watchdog.log}"
-        FYY_RUN_DIR="$FYY_RUN_DIR" INSTALL_DIR="$INSTALL_DIR" nohup "$WATCHDOG_PATH" > /dev/null 2>&1 &
-        WATCHDOG_PID=$!
-        disown "$WATCHDOG_PID" 2>/dev/null || true
+        WATCHDOG_MODE="process"
+        # Try cron (persists across container restarts)
+        if command -v crontab >/dev/null 2>&1; then
+            CRON_EXPR="* * * * * FYY_RUN_DIR=${FYY_RUN_DIR} INSTALL_DIR=${INSTALL_DIR} ${WATCHDOG_PATH} --once"
+            EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+            if ! echo "$EXISTING_CRON" | grep -q 'fyyd-watchdog'; then
+                (echo "$EXISTING_CRON"; echo "$CRON_EXPR") | crontab - 2>/dev/null && WATCHDOG_MODE="cron" || true
+            else
+                WATCHDOG_MODE="cron"
+            fi
+        fi
 
-        echo "${GREEN}fyyd running (PID: ${DAEMON_PID}) with auto-heal watchdog (PID: ${WATCHDOG_PID}).${RESET}"
+        if [ "$WATCHDOG_MODE" = "cron" ]; then
+            FYY_RUN_DIR="$FYY_RUN_DIR" INSTALL_DIR="$INSTALL_DIR" "$WATCHDOG_PATH" --once
+            echo "  Watchdog: cron (check every 1 min, persists across restart)"
+        else
+            FYY_RUN_DIR="$FYY_RUN_DIR" INSTALL_DIR="$INSTALL_DIR" nohup "$WATCHDOG_PATH" > /dev/null 2>&1 &
+            WATCHDOG_PID=$!
+            disown "$WATCHDOG_PID" 2>/dev/null || true
+            echo "  Watchdog: background process (PID: ${WATCHDOG_PID}, ephemeral)"
+        fi
+
+        echo "${GREEN}fyyd running (PID: ${DAEMON_PID}) with auto-heal watchdog.${RESET}"
         SERVICE_INSTALLED=0
         else
             # On hosts: stop temp daemon, system service will manage it properly.
@@ -288,10 +308,9 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "  │   available inside containers. The daemon runs as a regular"
     echo "  │   process and will stop when the container exits."
     echo "  │"
-    echo "  ├─ Auto-heal watchdog running (PID: ${WATCHDOG_PID:-N/A})"
-    echo "  │   Why? Checks fyyd every 60s via fyy status, restarts on crash."
+    echo "  ├─ Auto-heal watchdog (${WATCHDOG_MODE})"
+    echo "  │   Checks fyyd every 60s, restarts on crash."
     echo "  │   Log: /tmp/fyyd-watchdog.log"
-    echo "  │   Ephemeral (tmpfs) — lost on container restart."
     echo "  │"
     echo "  ├─ System service: SKIPPED"
     echo "  │   Why? systemd/launchd are host-level init systems unavailable"
@@ -302,15 +321,20 @@ if [ "$IS_CONTAINER" = "1" ]; then
     echo "      Why? Identity tokens and skill data live here. To persist"
     echo "      across restarts, mount a volume and set FYY_STATE_DIR."
     echo ""
+    if [ "$WATCHDOG_MODE" = "cron" ]; then
+    echo "${BOLD}Watchdog persists across restarts${RESET} — cron job installed."
+    echo "No entrypoint modification needed."
+    else
     echo "${BOLD}If the container restarts:${RESET}"
-    echo "  The watchdog is on tmpfs and will be lost. For auto-heal across"
-    echo "  restarts, add to entrypoint:"
+    echo "  The watchdog process runs on tmpfs and will be lost. To auto-start"
+    echo "  on boot, add to entrypoint:"
     echo ""
     echo "    export FYY_RUN_DIR=${FYY_RUN_DIR}"
     echo "    mkdir -p \${FYY_RUN_DIR} || true"
     echo "    nohup ${INSTALL_DIR}/fyyd --foreground > /tmp/fyyd.log 2>&1 &"
     echo ""
     echo "  Or use a sidecar: see https://fyy.dev/readme.md#container-setup"
+    fi
 else
     echo "Quick start:"
     echo "  fyy status              Check network connection"

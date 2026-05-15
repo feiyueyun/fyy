@@ -5,6 +5,7 @@
 #
 # What this removes:
 #   - fyyd daemon process (if running)
+#   - fyyd-watchdog cron job (if installed)
 #   - fyyd-watchdog process + script (if deployed)
 #   - Binaries: /usr/local/bin/fyy, /usr/local/bin/fyyd (or INSTALL_DIR)
 #   - Runtime dir: /tmp/fyy-run (socket + PID), or FYY_RUN_DIR
@@ -86,7 +87,20 @@ if [ -n "$FYAD_PIDS" ]; then
     kill -9 $FYAD_PIDS 2>/dev/null || true
 fi
 
-# --- Step 3b: Stop watchdog (if running) ---
+# --- Step 3b: Remove cron entry (if installed) ---
+if command -v crontab >/dev/null 2>&1; then
+    CRON_CLEANED=0
+    EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+    NEW_CRON=$(echo "$EXISTING_CRON" | grep -v 'fyyd-watchdog' || true)
+    if [ "$EXISTING_CRON" != "$NEW_CRON" ]; then
+        echo "$NEW_CRON" | crontab - 2>/dev/null && CRON_CLEANED=1
+    fi
+    if [ "$CRON_CLEANED" = "1" ]; then
+        echo "${BOLD}==>${RESET} Removed fyyd-watchdog cron entry."
+    fi
+fi
+
+# --- Step 3c: Stop watchdog (if running as background process) ---
 WATCHDOG_KILLED=0
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/watchdog.pid" ]; then
     WD_PID=$(cat "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || echo "")
