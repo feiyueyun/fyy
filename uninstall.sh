@@ -3,21 +3,23 @@
 # Usage: curl -fsSL https://fyy.dev/uninstall.sh | sh
 #        curl -fsSL https://fyy.dev/uninstall.sh | sh -s -- --purge
 #
+# Resolution order for paths:
+#   1. $HOME/.fyy/manifest.json (written by install.sh — most precise)
+#   2. Environment variables (FYY_RUN_DIR, FYY_STATE_DIR, INSTALL_DIR)
+#   3. Standard path probes (fallback)
+#
 # What this removes:
 #   - fyyd daemon process (if running)
 #   - fyyd-watchdog cron job (if installed)
 #   - fyyd-watchdog process + script (if deployed)
-#   - Binaries: /usr/local/bin/fyy, /usr/local/bin/fyyd (or INSTALL_DIR)
-#   - Runtime dir: /tmp/fyy-run (socket + PID), or FYY_RUN_DIR
+#   - Binaries: fyy, fyyd, fyyd-watchdog
+#   - Runtime dir: socket, PID, watchdog PID
 #   - System service: systemd (Linux) or launchd (macOS)
-#   - Config file: ~/.feiyueyun/config.*
+#   - Config files: ~/.feiyueyun/config.*
 #
-# With --purge, also removes state data:
+# With --purge, also removes all state data:
 #   - ~/.feiyueyun/ (identity tokens, skill cache, local DB)
-#
-# Environment variables:
-#   INSTALL_DIR   Binary directory (default: /usr/local/bin)
-#   FYY_RUN_DIR   Runtime dir override (probed if not set)
+#   - ~/.fyy/ (manifest)
 
 set -eu
 
@@ -32,7 +34,6 @@ else
     BOLD=""; GREEN=""; YELLOW=""; RED=""; RESET=""
 fi
 
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 PURGE="${FYY_PURGE:-0}"
 if [ "${1:-}" = "--purge" ]; then
     PURGE=1
@@ -42,23 +43,69 @@ KEPT_SOMETHING=0
 
 echo "${BOLD}==>${RESET} fyy uninstall"
 
-# --- Step 1: Detect container ---
+# ---------------------------------------------------------------------------
+# Step 0: Load install manifest (written by install.sh at $HOME/.fyy/manifest.json)
+# ---------------------------------------------------------------------------
+MANIFEST="${HOME}/.fyy/manifest.json"
 IS_CONTAINER=0
-if [ -f /.dockerenv ] 2>/dev/null || grep -qE 'docker|containerd|kubepods' /proc/1/cgroup 2>/dev/null; then
-    IS_CONTAINER=1
+INSTALL_DIR=""
+FYY_RUN_DIR=""
+FYY_STATE_DIR=""
+WATCHDOG_MODE=""
+
+if [ -f "$MANIFEST" ]; then
+    echo "${BOLD}==>${RESET} Reading install manifest: ${MANIFEST}"
+
+    IS_CONTAINER=$(sed -n 's/.*"container":[[:space:]]*\(true\|false\).*/\1/p' "$MANIFEST")
+    IS_CONTAINER=$([ "$IS_CONTAINER" = "true" ] && echo 1 || echo 0)
+
+    INSTALL_DIR=$(sed -n 's/.*"install_dir":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
+    FYY_RUN_DIR=$(sed -n 's/.*"run_dir":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
+    FYY_STATE_DIR=$(sed -n 's/.*"state_dir":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
+    WATCHDOG_MODE=$(sed -n 's/.*"mode":[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST")
+
+    echo "  Loaded from manifest:"
+    echo "    install_dir: ${INSTALL_DIR:-N/A}"
+    echo "    run_dir: ${FYY_RUN_DIR:-N/A}"
+    echo "    state_dir: ${FYY_STATE_DIR:-N/A}"
+    echo "    container: $([ "$IS_CONTAINER" = "1" ] && echo 'yes' || echo 'no')"
+else
+    echo "${YELLOW}  No manifest found, probing paths...${RESET}"
+
+    IS_CONTAINER=0
+    if [ -f /.dockerenv ] 2>/dev/null || grep -qE 'docker|containerd|kubepods' /proc/1/cgroup 2>/dev/null; then
+        IS_CONTAINER=1
+    fi
+
+    if [ -z "${FYY_RUN_DIR:-}" ]; then
+        for d in /tmp/fyy-run "${HOME}/.fyy/run"; do
+            if [ -S "${d}/fyyd.sock" ] || [ -f "${d}/fyyd.pid" ]; then
+                FYY_RUN_DIR="$d"
+                break
+            fi
+        done
+    fi
+    INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 fi
 
-# --- Step 2: Probe FYY_RUN_DIR ---
-if [ -z "${FYY_RUN_DIR:-}" ]; then
-    for d in /tmp/fyy-run "${HOME}/.fyy/run"; do
-        if [ -S "${d}/fyyd.sock" ] || [ -f "${d}/fyyd.pid" ]; then
-            FYY_RUN_DIR="$d"
-            break
-        fi
-    done
+# ---------------------------------------------------------------------------
+# Step 1: Remove cron entry (if installed)
+# ---------------------------------------------------------------------------
+if command -v crontab >/dev/null 2>&1; then
+    CRON_CLEANED=0
+    EXISTING_CRON=$(crontab -l 2>/dev/null || true)
+    NEW_CRON=$(echo "$EXISTING_CRON" | grep -v 'fyyd-watchdog' || true)
+    if [ "$EXISTING_CRON" != "$NEW_CRON" ]; then
+        echo "$NEW_CRON" | crontab - 2>/dev/null && CRON_CLEANED=1
+    fi
+    if [ "$CRON_CLEANED" = "1" ]; then
+        echo "${BOLD}==>${RESET} Removed fyyd-watchdog cron entry."
+    fi
 fi
 
-# --- Step 3: Stop daemon ---
+# ---------------------------------------------------------------------------
+# Step 2: Stop daemon + watchdog
+# ---------------------------------------------------------------------------
 DAEMON_KILLED=0
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/fyyd.pid" ]; then
     DAEMON_PID=$(cat "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || echo "")
@@ -78,29 +125,13 @@ if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/fyyd.pid" ]; then
     rm -f "${FYY_RUN_DIR}/fyyd.pid" 2>/dev/null || true
 fi
 
-# Kill any remaining fyyd processes
-FYAD_PIDS=$(pgrep -x fyyd 2>/dev/null || true)
-if [ -n "$FYAD_PIDS" ]; then
-    echo "${BOLD}==>${RESET} Stopping remaining fyyd processes..."
-    kill $FYAD_PIDS 2>/dev/null || true
-    sleep 1
-    kill -9 $FYAD_PIDS 2>/dev/null || true
-fi
-
-# --- Step 3b: Remove cron entry (if installed) ---
-if command -v crontab >/dev/null 2>&1; then
-    CRON_CLEANED=0
-    EXISTING_CRON=$(crontab -l 2>/dev/null || true)
-    NEW_CRON=$(echo "$EXISTING_CRON" | grep -v 'fyyd-watchdog' || true)
-    if [ "$EXISTING_CRON" != "$NEW_CRON" ]; then
-        echo "$NEW_CRON" | crontab - 2>/dev/null && CRON_CLEANED=1
+for PROC in fyyd fyyd-watchdog; do
+    PIDS=$(pgrep -x "$PROC" 2>/dev/null || true)
+    if [ -n "$PIDS" ]; then
+        kill $PIDS 2>/dev/null || true
     fi
-    if [ "$CRON_CLEANED" = "1" ]; then
-        echo "${BOLD}==>${RESET} Removed fyyd-watchdog cron entry."
-    fi
-fi
+done
 
-# --- Step 3c: Stop watchdog (if running as background process) ---
 WATCHDOG_KILLED=0
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/watchdog.pid" ]; then
     WD_PID=$(cat "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || echo "")
@@ -111,39 +142,32 @@ if [ -n "${FYY_RUN_DIR:-}" ] && [ -f "${FYY_RUN_DIR}/watchdog.pid" ]; then
     rm -f "${FYY_RUN_DIR}/watchdog.pid" 2>/dev/null || true
 fi
 
-# Also kill any watchdog by process name
-WD_PIDS=$(pgrep -x fyyd-watchdog 2>/dev/null || true)
-if [ -n "$WD_PIDS" ]; then
-    kill $WD_PIDS 2>/dev/null || true
-fi
-
-# --- Step 4: Remove system service (host only) ---
-if [ "$IS_CONTAINER" != "1" ] && command -v "${INSTALL_DIR}/fyy" >/dev/null 2>&1; then
+# ---------------------------------------------------------------------------
+# Step 3: Remove system service (host only)
+# ---------------------------------------------------------------------------
+if [ "$IS_CONTAINER" != "1" ] && [ -n "$INSTALL_DIR" ] && [ -x "${INSTALL_DIR}/fyy" ]; then
     echo "${BOLD}==>${RESET} Removing system service..."
     "${INSTALL_DIR}/fyy" service stop 2>/dev/null || true
     "${INSTALL_DIR}/fyy" service uninstall 2>/dev/null || true
 fi
 
-# --- Step 5: Remove binaries ---
+# ---------------------------------------------------------------------------
+# Step 4: Remove binaries
+# ---------------------------------------------------------------------------
 echo "${BOLD}==>${RESET} Removing binaries..."
-for bin in "${INSTALL_DIR}/fyy" "${INSTALL_DIR}/fyyd" "${INSTALL_DIR}/fyyd-watchdog"; do
-    if [ -f "$bin" ] || [ -L "$bin" ]; then
-        rm -f "$bin"
-        echo "  Removed: $bin"
-    fi
-done
-
-# Also check ~/.local/bin for user-local installs
-for dir in "${HOME}/.local/bin"; do
+for dir in "${INSTALL_DIR}" "${HOME}/.local/bin"; do
+    [ -n "$dir" ] || continue
     for bin in "${dir}/fyy" "${dir}/fyyd" "${dir}/fyyd-watchdog"; do
         if [ -f "$bin" ] || [ -L "$bin" ]; then
             rm -f "$bin"
-            echo "  Removed: $bin"
+            echo "  Removed: ${bin}"
         fi
     done
 done
 
-# --- Step 6: Remove runtime dir ---
+# ---------------------------------------------------------------------------
+# Step 5: Remove runtime dir
+# ---------------------------------------------------------------------------
 if [ -n "${FYY_RUN_DIR:-}" ] && [ -d "$FYY_RUN_DIR" ]; then
     echo "${BOLD}==>${RESET} Removing runtime directory..."
     rm -rf "$FYY_RUN_DIR"
@@ -156,30 +180,36 @@ for d in /tmp/fyy-run "${HOME}/.fyy/run"; do
     fi
 done
 
-# --- Step 7: Remove config ---
-CONFIG_DIR="${HOME}/.feiyueyun"
+# ---------------------------------------------------------------------------
+# Step 6: Remove config + state
+# ---------------------------------------------------------------------------
+CONFIG_DIR="${FYY_STATE_DIR:-${HOME}/.feiyueyun}"
 if [ -d "$CONFIG_DIR" ]; then
     rm -f "${CONFIG_DIR}/config.yaml" "${CONFIG_DIR}/config.json" 2>/dev/null || true
-    echo "${BOLD}==>${RESET} Removed config files."
-fi
 
-# --- Step 8: Purge state data (optional) ---
-if [ "$PURGE" = "1" ]; then
-    if [ -d "$CONFIG_DIR" ]; then
+    if [ "$PURGE" = "1" ]; then
         echo "${BOLD}==>${RESET} Purging all fyy state data..."
         rm -rf "$CONFIG_DIR"
         echo "  Removed: ${CONFIG_DIR}"
-    fi
-    if [ -d "${HOME}/.fyy" ]; then
-        rm -rf "${HOME}/.fyy" 2>/dev/null || true
+        if [ -d "${HOME}/.fyy" ]; then
+            rm -rf "${HOME}/.fyy" 2>/dev/null || true
+            echo "  Removed: ${HOME}/.fyy (manifest)"
+        fi
+    else
+        REMAINING=$(find "$CONFIG_DIR" -mindepth 1 2>/dev/null | head -5 || echo "")
+        if [ -n "$REMAINING" ]; then
+            KEPT_SOMETHING=1
+        fi
     fi
 else
-    if [ -d "$CONFIG_DIR" ]; then
-        KEPT_SOMETHING=1
+    if [ "$PURGE" = "1" ] && [ -d "${HOME}/.fyy" ]; then
+        rm -rf "${HOME}/.fyy" 2>/dev/null || true
     fi
 fi
 
-# --- Done ---
+# ---------------------------------------------------------------------------
+# Done
+# ---------------------------------------------------------------------------
 echo ""
 echo "${GREEN}${BOLD}=== Uninstall Complete ===${RESET}"
 echo ""

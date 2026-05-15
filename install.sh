@@ -342,6 +342,34 @@ else
     echo "  fyy skill list          Browse available skills"
 fi
 
+# --- Step 9: Write install manifest for precise uninstall ---
+MANIFEST_DIR="${HOME}/.fyy"
+mkdir -p "$MANIFEST_DIR" 2>/dev/null || true
+FYY_STATE_DIR="${FYY_STATE_DIR:-${HOME}/.feiyueyun}"
+cat > "${MANIFEST_DIR}/manifest.json" << MANIFEST
+{
+  "version": "${VERSION}",
+  "install_time": "$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo 'unknown')",
+  "container": $([ "$IS_CONTAINER" = "1" ] && echo "true" || echo "false"),
+  "binaries": {
+    "fyy": "${INSTALL_DIR}/fyy",
+    "fyyd": "${INSTALL_DIR}/fyyd",
+    "watchdog": "${INSTALL_DIR}/fyyd-watchdog"
+  },
+  "paths": {
+    "install_dir": "${INSTALL_DIR}",
+    "run_dir": "${FYY_RUN_DIR}",
+    "state_dir": "${FYY_STATE_DIR}",
+    "config_dir": "${FYY_STATE_DIR}"
+  },
+  "watchdog": {
+    "mode": "${WATCHDOG_MODE:-none}",
+    "path": "${INSTALL_DIR}/fyyd-watchdog"
+  }
+}
+MANIFEST
+echo "${GREEN}Install manifest written to ${MANIFEST_DIR}/manifest.json${RESET}"
+
 echo ""
 echo "Documentation: https://github.com/feiyueyun/fyy"
 echo "Website:       https://fyy.dev"
