@@ -3,7 +3,7 @@
 # Usage: curl -fsSL https://fyy.dev/install.sh | sh
 #
 # Environment variables:
-#   FYY_VERSION   Specific version to install (default: v0.1.3-alpha)
+#   FYY_VERSION   Specific version to install (default: v0.1.4-alpha)
 #   FYY_INSTALL   Installation directory (default: /usr/local/bin)
 #   FYY_SERVER    Control plane address for auto-join (default: https://ts.fyy.dev)
 #   FYY_API       Channel 2 API address for auto-provision (derived from FYY_SERVER)
@@ -81,7 +81,7 @@ esac
 PLATFORM="${GOOS}-${GOARCH}"
 
 # --- Step 2: Determine version ---
-VERSION="${FYY_VERSION:-v0.1.3-alpha}"
+VERSION="${FYY_VERSION:-v0.1.4-alpha}"
 
 # --- Step 3: Check if already installed ---
 already_installed=0
