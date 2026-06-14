@@ -225,12 +225,29 @@ SERVICE_INSTALLED="${SERVICE_INSTALLED:-0}"
 if [ "$IS_CONTAINER" != "1" ] && [ "$FYY_SKIP_JOIN" != "1" ]; then
     echo "${BOLD}==>${RESET} Installing system service (auto-start on boot)..."
 
+    # Fix config.yaml to use absolute paths (avoids ~ expansion failure in
+    # systemd/launchd context where $HOME may not be set).
+    if [ -f "${HOME}/.fyy/config.yaml" ]; then
+        sed -i.bak "s|~/.fyy/state|${HOME}/.fyy/state|g" "${HOME}/.fyy/config.yaml" 2>/dev/null || true
+        rm -f "${HOME}/.fyy/config.yaml.bak" 2>/dev/null || true
+    fi
+
     case "$(uname -s)" in
         Linux)
-            if "${INSTALL_DIR}/fyy" service install 2>/dev/null; then
-                SERVICE_INSTALLED=1
-            elif "${INSTALL_DIR}/fyy" service install --system 2>/dev/null; then
-                SERVICE_INSTALLED=1
+            if [ "$(id -u)" -eq 0 ]; then
+                # Running as root — system-level service (/etc/systemd/system/)
+                # uses proper paths and survives login session restarts.
+                if "${INSTALL_DIR}/fyy" service install --system 2>/dev/null; then
+                    SERVICE_INSTALLED=1
+                fi
+            fi
+            if [ "$SERVICE_INSTALLED" -eq 0 ]; then
+                # Fallback: user-level service or non-root.
+                if "${INSTALL_DIR}/fyy" service install 2>/dev/null; then
+                    SERVICE_INSTALLED=1
+                elif "${INSTALL_DIR}/fyy" service install --system 2>/dev/null; then
+                    SERVICE_INSTALLED=1
+                fi
             fi
             ;;
         Darwin)
